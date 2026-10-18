@@ -1,0 +1,13 @@
+{
+  "locale": "pt-br",
+  "sections": [
+    {
+      "heading": "Exemplo inteiramente fictício",
+      "text": "Documento sintético para demonstrar o formato de entrada. Não contém paciente, diagnóstico, recomendação ou informação clínica real."
+    },
+    {
+      "heading": "Texto fornecido pela pessoa usuária",
+      "text": "O aplicativo mantém o texto original e escapa tags como <script>. Não completa informações ausentes."
+    }
+  ]
+}

@@ -1,0 +1,44 @@
+{
+  "name": "zellolife-open",
+  "version": "0.1.0",
+  "description": "Standalone clinical-document safety utilities extracted from ZelloLife. No patient data or hosted services.",
+  "type": "module",
+  "license": "MIT",
+  "engines": {
+    "node": ">=22.12.0"
+  },
+  "exports": {
+    ".": "./src/index.js",
+    "./audio": "./src/audioSecurity.js",
+    "./locale": "./src/clinicalLocale.js",
+    "./html": "./src/reportHtmlSafety.js"
+  },
+  "bin": {
+    "zello-open": "./src/cli.js"
+  },
+  "files": [
+    "src/*.js",
+    "README.md",
+    "LICENSE",
+    "THIRD_PARTY_NOTICES.md",
+    "examples/*.json",
+    "!src/*.test.js",
+    "SANITIZATION.md",
+    "CONTRIBUTING.md",
+    "SECURITY.md"
+  ],
+  "scripts": {
+    "test": "vitest run src",
+    "test:release": "node --test tests/release.test.js",
+    "demo": "node src/cli.js examples/synthetic-document.json",
+    "scan": "node scripts/check-release.mjs",
+    "check": "npm test && npm run test:release && npm run scan"
+  },
+  "dependencies": {
+    "ipaddr.js": "2.4.0",
+    "sanitize-html": "2.17.6"
+  },
+  "devDependencies": {
+    "vitest": "4.1.10"
+  }
+}
