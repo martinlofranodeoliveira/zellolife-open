@@ -27,6 +27,20 @@ node src/cli.js examples/synthetic-document.json
 node src/cli.js --help
 ```
 
+Também é possível encaminhar JSON por entrada padrão, sem criar um arquivo
+temporário:
+
+```sh
+node src/cli.js - < examples/synthetic-document.json
+```
+
+Arquivos e entrada padrão aceitam no máximo 1 MiB de JSON codificado em UTF-8.
+O limite é aplicado durante a leitura, antes do parser. Bytes UTF-8 inválidos ou
+truncados são rejeitados para evitar substituir silenciosamente o texto
+fornecido. Em caso de erro, o CLI não imprime conteúdo parcial, caminhos ou
+mensagens do parser; retorna apenas um código fechado e sai com status 1.
+`DOCUMENT_FILE_TOO_LARGE` identifica excesso de bytes nas duas formas de entrada.
+
 Para usar como dependência antes de uma publicação no npm:
 
 ```sh

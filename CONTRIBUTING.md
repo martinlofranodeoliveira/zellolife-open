@@ -13,6 +13,7 @@ contribuição deve revisar seu código, ter direito de licenciá-lo sob MIT e
 verificar os testes. Não produza commits vazios, alterações cosméticas em
 massa ou código sem propósito para aumentar contagens de atividade.
 
-Próximas melhorias úteis: declarações TypeScript, testes de invariantes do
-sanitizador, stream de entrada no CLI e documentação de integração com
-aplicações de terceiros. Evite acrescentar uma dependência de nuvem ao núcleo.
+O CLI aceita arquivos ou stream de entrada padrão com limite de bytes e
+validação estrita de UTF-8. Próximas melhorias úteis: declarações TypeScript,
+testes de invariantes do sanitizador e documentação de integração com aplicações
+de terceiros. Evite acrescentar uma dependência de nuvem ao núcleo.
