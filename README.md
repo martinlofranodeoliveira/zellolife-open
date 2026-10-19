@@ -81,6 +81,41 @@ negam destinos por padrão. Configure **sua própria** origem em
 O limite opcional `AUDIO_MAX_DOWNLOAD_BYTES` aceita de 1 byte a 1 GiB.
 O arquivo `.env.example` apenas documenta as opções; não é carregado.
 
+### Caminhos relativos de objetos
+
+`isInternalAudioPath(value)` retorna um booleano e valida caminhos relativos de
+até 2.048 unidades UTF-16, sem modificar, normalizar ou devolver o conteúdo.
+Valores que não sejam strings, caminhos vazios, barras iniciais, esquemas de
+URL, barras invertidas, query/fragmento, controles ASCII (C0 e DEL), segmentos
+vazios, `.` ou `..` são recusados. Espaços nas extremidades também são recusados.
+
+Escapes percentuais precisam representar UTF-8 válido. Cada segmento é
+decodificado uma vez apenas para validação: separadores, controles, query ou
+fragmento codificados são recusados, assim como segmentos que se tornam `.` ou
+`..`. Qualquer `%` restante após essa passagem é recusado, impedindo codificação
+aninhada. O caminho
+decodificado completo também deve continuar relativo, sem esquema de URL nem
+espaços nas extremidades. Isso impede que controles removidos pelo parser ou
+escapes de travessia transformem um caminho aceito em outro destino.
+
+Nomes comuns, Unicode, espaços interiores e escapes benignos continuam aceitos:
+
+```js
+isInternalAudioPath('synthetic/áudio.webm'); // true
+isInternalAudioPath('synthetic/audio%20sample.webm'); // true
+isInternalAudioPath('synthetic/file%2ename.webm'); // true
+isInternalAudioPath('/synthetic/audio.webm'); // false
+isInternalAudioPath('synthetic/%2e%2e/audio.webm'); // false
+isInternalAudioPath('synthetic%2faudio.webm'); // false
+```
+
+A recusa de caminhos iniciados por `/` e de codificações ambíguas torna mais
+estritos alguns valores anteriormente aceitos. Use o caminho validado com uma
+base de armazenamento confiável terminada em `/`. O helper não verifica existência,
+permissões, links simbólicos, regras de filesystem ou interpretações específicas
+de proxies/servidores. Não substitui autorização nem as verificações de URL,
+redirecionamento e transporte descritas a seguir.
+
 `createAudioDownloadAgents()` fornece agentes HTTP/HTTPS com verificação DNS.
 O consumidor precisa usar esses agentes na conexão real, aplicar o limite de
 bytes e chamar `validateAudioRedirect` em **cada** redirecionamento. Validar

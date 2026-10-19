@@ -219,16 +219,33 @@ export function isInternalAudioPath(value) {
   }
   if (
     /^[A-Za-z][A-Za-z\d+.-]*:/.test(value) ||
-    value.startsWith('//') ||
+    value.startsWith('/') ||
     value.includes('\\') ||
-    value.includes('\0') ||
+    /[\u0000-\u001f\u007f]/.test(value) ||
     value.includes('?') ||
     value.includes('#')
   ) {
     return false;
   }
-  const segments = value.replace(/^\/+/, '').split('/');
-  return segments.length > 0 && segments.every((segment) => segment && segment !== '.' && segment !== '..');
+  const decodedSegments = [];
+  for (const segment of value.split('/')) {
+    if (!segment || segment === '.' || segment === '..') return false;
+    let decoded;
+    try {
+      decoded = decodeURIComponent(segment);
+    } catch {
+      return false;
+    }
+    // A URL parser or consumer decoding once must not reveal a separator,
+    // traversal segment, control character or another layer of escaping.
+    if (decoded === '.' || decoded === '..' || /[/\\?#%\u0000-\u001f\u007f]/.test(decoded)) {
+      return false;
+    }
+    decodedSegments.push(decoded);
+  }
+  const decodedPath = decodedSegments.join('/');
+  return decodedPath === decodedPath.trim()
+    && !/^[A-Za-z][A-Za-z\d+.-]*:/.test(decodedPath);
 }
 
 export function assertAllowedLegacyAudioUrl(value) {
