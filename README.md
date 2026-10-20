@@ -49,13 +49,17 @@ npm install /caminho/para/zellolife-open
 ```
 
 ```js
-import { renderDocument, sanitizeReportHtml, isInternalAudioPath } from 'zellolife-open';
+import { renderDocument, renderPlainTextDocument, sanitizeReportHtml, isInternalAudioPath } from 'zellolife-open';
 
 const document = renderDocument({
   locale: 'pt-br',
   sections: [{ heading: 'Exemplo sintético', text: 'Texto fornecido pela pessoa usuária.' }],
 });
 console.log(document.html);
+console.log(renderPlainTextDocument({
+  locale: 'pt-br',
+  sections: [{ heading: 'Exemplo sintético', text: 'Texto fornecido pela pessoa usuária.' }],
+}).text);
 console.log(sanitizeReportHtml('<p>Texto</p><script>alert(1)</script>'));
 console.log(isInternalAudioPath('synthetic/example.webm'));
 ```
@@ -64,6 +68,12 @@ console.log(isInternalAudioPath('synthetic/example.webm'));
 
 - Renderização determinística: preserva o texto fornecido, escapa HTML e não
   inventa achados ou completa informações clínicas ausentes.
+- Exportação em texto simples (`renderPlainTextDocument`): usa a mesma
+  validação do documento HTML e retorna `{ locale, text }` com título
+  normalizado + LF + texto original, separando seções por dois LF, sem
+  interpretar HTML, sem inferir achados e sem gravar ou enviar dados. Esta
+  edição continua um núcleo reutilizável, não o SaaS completo, e não realiza
+  decisão clínica.
 - Sanitização de HTML por lista de tags e atributos permitidos, sem scripts,
   estilos, formulários, URLs, imagens externas ou manipuladores de eventos.
 - Idiomas `pt-br`, `en-us` e `es`, com validação da compatibilidade entre idioma
