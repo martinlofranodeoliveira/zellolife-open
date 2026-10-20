@@ -276,3 +276,76 @@ Examples (JSON input and expected output):
 ```
 
 Public regression tests: `src/community_document_outline_index.test.js`.
+
+
+<!-- community-core:document-section-offset-map -->
+### Deterministic document section offset map for local slicing
+
+Lets local document tools map and slice plain-text exports without rendering HTML or copying full section text. It reuses existing document validation so only well-formed inputs are measured, reports UTF-16 start offsets and lengths that sum to the exact plain-text length for local navigation and iteration, and stays fully deterministic with no clinical inference, file access, network activity, account, or storage.
+
+Reusable deterministic JSON core: `src/community/document_section_offset_map.mjs`, API `runFeature(payload)`. This module is independently tested; application/UI integration is outside this change.
+
+Expose runFeature(payload) as a pure deterministic function. Input payload must be a plain object with locale and sections where locale is one of pt-br, en-us, es with case and surrounding whitespace normalized, and sections is an array of 1 to 100 objects with heading and text where heading is a string with non-empty trim and original length up to 200 UTF-16 units and text is a string with cumulative heading.length plus text.length up to 180000 UTF-16 units. Validation matches validateDocument and throws TypeError DOCUMENT_OBJECT_REQUIRED for non-object input, TypeError DOCUMENT_LOCALE_INVALID for bad locale, TypeError DOCUMENT_SECTIONS_INVALID for bad array, TypeError DOCUMENT_SECTION_INVALID for bad heading or text, and RangeError DOCUMENT_TOO_LARGE for overflow, without mutating input. On success define sectionText as trimmed heading plus single LF (U+000A) plus original text per section and fullText as sectionText joined with double LF, with all lengths in UTF-16 String.length units. For each section in order compute length as sectionText length and start as UTF-16 offset in fullText with first start zero and each next start equal to previous start plus previous length plus 2 for the separator, using for-of iteration in order without indexed access. Return an object with locale, totalLength and boundaries where locale is normalized, totalLength equals fullText length, and boundaries has one entry per section in order with index as zero-based integer, start as integer and length as integer. No HTML escaping, rendering, sanitization, I/O, network, inference, or clinical decision is performed. Output contains only locale, totalLength and boundary triples, never headings, full text, unknown fields, or identifiers. This remains a reusable local core, not the full SaaS.
+
+Examples (JSON input and expected output):
+
+```json
+{
+  "input": {
+    "locale": "pt-br",
+    "sections": [
+      {
+        "heading": "  Exemplo  ",
+        "text": "Texto."
+      },
+      {
+        "heading": "Notas",
+        "text": "Mais texto"
+      }
+    ]
+  },
+  "output": {
+    "boundaries": [
+      {
+        "index": 0,
+        "length": 14,
+        "start": 0
+      },
+      {
+        "index": 1,
+        "length": 16,
+        "start": 16
+      }
+    ],
+    "locale": "pt-br",
+    "totalLength": 32
+  }
+}
+```
+
+```json
+{
+  "input": {
+    "locale": " EN-US ",
+    "sections": [
+      {
+        "heading": "Intro",
+        "text": "Hi"
+      }
+    ]
+  },
+  "output": {
+    "boundaries": [
+      {
+        "index": 0,
+        "length": 8,
+        "start": 0
+      }
+    ],
+    "locale": "en-us",
+    "totalLength": 8
+  }
+}
+```
+
+Public regression tests: `src/community_document_section_offset_map.test.js`.
