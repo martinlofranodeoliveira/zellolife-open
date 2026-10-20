@@ -205,3 +205,74 @@ dados pessoais em issues, exemplos ou pull requests.
 
 Veja [a origem e as exclusões da edição](SANITIZATION.md), [como contribuir](CONTRIBUTING.md),
 [a política de segurança](SECURITY.md) e [as licenças de dependências](THIRD_PARTY_NOTICES.md).
+
+
+<!-- community-core:document-outline-index -->
+### Deterministic document outline index for navigation
+
+Lets local document tools derive a table-of-contents-like index without rendering HTML or copying full section text. It reuses existing document validation so only well-formed inputs are indexed, preserves trimmed headings exactly, and reports text lengths for local layout budgeting. The operation stays deterministic, performs no clinical inference, and requires no account, network, or UI integration.
+
+Reusable deterministic JSON core: `src/community/document_outline_index.mjs`, API `runFeature(payload)`. This module is independently tested; application/UI integration is outside this change.
+
+Expose runFeature(payload) as a pure deterministic function. Input payload must be a plain object with locale and sections where locale is one of pt-br, en-us, es with case and surrounding whitespace normalized, and sections is an array of 1 to 100 objects with heading and text where heading is a string with non-empty trim and original length up to 200 UTF-16 units and text is a string with cumulative heading.length plus text.length up to 180000 UTF-16 units. Validation matches validateDocument and throws TypeError DOCUMENT_OBJECT_REQUIRED for non-object input, TypeError DOCUMENT_LOCALE_INVALID for bad locale, TypeError DOCUMENT_SECTIONS_INVALID for bad array, TypeError DOCUMENT_SECTION_INVALID for bad heading or text, and RangeError DOCUMENT_TOO_LARGE for overflow, without mutating input. On success return an object with locale and outline where locale is normalized and outline has one entry per section in order with index as zero-based integer, heading as trimmed string, and textLength as text.length in UTF-16 units. No HTML escaping, rendering, sanitization, I/O, network, inference, or clinical decision is performed. Output contains only locale and outline triples, never full text, unknown fields, or identifiers.
+
+Examples (JSON input and expected output):
+
+```json
+{
+  "input": {
+    "locale": "pt-br",
+    "sections": [
+      {
+        "heading": "  Exemplo  ",
+        "text": "Texto."
+      },
+      {
+        "heading": "Notas",
+        "text": "Mais texto"
+      }
+    ]
+  },
+  "output": {
+    "locale": "pt-br",
+    "outline": [
+      {
+        "heading": "Exemplo",
+        "index": 0,
+        "textLength": 6
+      },
+      {
+        "heading": "Notas",
+        "index": 1,
+        "textLength": 10
+      }
+    ]
+  }
+}
+```
+
+```json
+{
+  "input": {
+    "locale": " EN-US ",
+    "sections": [
+      {
+        "heading": "Intro",
+        "text": "Hi"
+      }
+    ]
+  },
+  "output": {
+    "locale": "en-us",
+    "outline": [
+      {
+        "heading": "Intro",
+        "index": 0,
+        "textLength": 2
+      }
+    ]
+  }
+}
+```
+
+Public regression tests: `src/community_document_outline_index.test.js`.
