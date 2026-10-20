@@ -74,6 +74,29 @@ console.log(isInternalAudioPath('synthetic/example.webm'));
   interpretar HTML, sem inferir achados e sem gravar ou enviar dados. Esta
   edição continua um núcleo reutilizável, não o SaaS completo, e não realiza
   decisão clínica.
+- Resumo de metadados (`summarizeDocumentMetadata`): usa a mesma
+  validação do documento HTML e retorna apenas `{ locale, sectionCount,
+  characterCount }`, sem copiar títulos, textos, identificadores ou campos
+  desconhecidos. `locale` é normalizado, `sectionCount` é o número de
+  seções e `characterCount` soma `heading.trim().length + text.length` em
+  unidades UTF-16 (`String.length`), sem contar o idioma nem separadores de
+  apresentação. Markup, quebras de linha e texto contam literalmente, sem
+  renderização ou escaping. Os limites são validados no tamanho original
+  antes do trim (1 a 100 seções, título original não vazio de até 200
+  unidades UTF-16, soma original de título+texto até 180000), sem trocar o
+  limite por bytes ou code points. A entrada não é modificada e nada é
+  gravado ou enviado. Esta edição continua um núcleo reutilizável sem dados
+  ou serviços clínicos reais e não realiza decisão clínica.
+
+```js
+import { summarizeDocumentMetadata } from 'zellolife-open';
+
+const summary = summarizeDocumentMetadata({
+  locale: 'PT-BR ',
+  sections: [{ heading: '  Exemplo  ', text: 'Texto.' }],
+});
+console.log(summary); // { locale: 'pt-br', sectionCount: 1, characterCount: 13 }
+```
 - Sanitização de HTML por lista de tags e atributos permitidos, sem scripts,
   estilos, formulários, URLs, imagens externas ou manipuladores de eventos.
 - Idiomas `pt-br`, `en-us` e `es`, com validação da compatibilidade entre idioma
