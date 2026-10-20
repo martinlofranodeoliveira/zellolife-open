@@ -97,6 +97,41 @@ const summary = summarizeDocumentMetadata({
 });
 console.log(summary); // { locale: 'pt-br', sectionCount: 1, characterCount: 13 }
 ```
+- Fragmentação de texto simples (`chunkPlainTextDocument`): reutiliza
+  `renderPlainTextDocument` para validação, normalização de `locale` e texto
+  exato, e divide o texto em `chunks` para leitura/iteração local. Retorna
+  `{ locale, chunks }` com `chunks.join("") === renderPlainTextDocument(input).text`.
+  Uso apenas sintético e local, sem envio automático, escrita de arquivos ou
+  integração de UI:
+
+```js
+import { chunkPlainTextDocument, renderPlainTextDocument } from 'zellolife-open';
+
+const input = {
+  locale: 'pt-br',
+  sections: [{ heading: 'Exemplo sintético', text: 'Texto fornecido pela pessoa usuária.' }],
+};
+const { locale, chunks } = chunkPlainTextDocument(input); // maxCharacters omitido = 4000
+for (const chunk of chunks) {
+  console.log(chunk.length, chunk);
+}
+console.log(chunks.join("") === renderPlainTextDocument(input).text); // true
+```
+
+  Regras: `maxCharacters` omitido ou `undefined` usa `4000`; após o padrão,
+  somente número primitivo inteiro com `256 <= valor <= 16384` (unidades UTF-16/
+  `String.length`) é aceito, qualquer outro tipo/valor lança
+  `RangeError("DOCUMENT_CHUNK_SIZE_INVALID")` sem coerção e antes da validação
+  do documento (tamanho inválido tem precedência). Reutiliza o validador e os
+  limites originais (1 a 100 seções, título original não vazio até 200 unidades,
+  soma original título+texto até 180000) sem relaxar. Partição gulosa por prefixos
+  máximos de até `maxCharacters` unidades, recuando exatamente 1 só quando `end`
+  dividiria um par alto `D800..DBFF` + baixo `DC00..DFFF` adjacente; preserva
+  surrogates isolados, nunca gera chunk vazio, nunca divide par válido, sem
+  normalização e sem preservação de parágrafo/palavra/CRLF/grafema. Os limites são
+  caracteres/unidades de código, não bytes, tokens, palavras, parágrafos ou clusters
+  de grafema; os chunks contêm o conteúdo original e não são anonimização nem
+  decisão clínica. Continua núcleo reutilizável/protótipo, não o SaaS completo.
 - Sanitização de HTML por lista de tags e atributos permitidos, sem scripts,
   estilos, formulários, URLs, imagens externas ou manipuladores de eventos.
 - Idiomas `pt-br`, `en-us` e `es`, com validação da compatibilidade entre idioma

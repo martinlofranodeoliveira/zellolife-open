@@ -6,3 +6,4 @@ export * from './input.js';
 export * from './document.js';
 export * from './plainTextDocument.js';
 export * from './documentMetadata.js';
+export * from './documentChunks.js';
