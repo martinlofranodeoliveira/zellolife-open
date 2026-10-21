@@ -503,3 +503,73 @@ Examples (JSON input and expected output):
 ```
 
 Public regression tests: `src/community_document_blank_section_index.test.js`.
+
+
+<!-- community-core:document-line-break-audit-map -->
+### Deterministic text line-break audit map for local rendering
+
+Lets local document tools predict HTML line breaks and plain-text line structure without rendering HTML or copying full text. It reuses existing document validation so only well-formed inputs are audited, reports per-section LF counts that exactly match future br inserts for local layout budgeting, and stays fully deterministic with no clinical inference, file access, network activity, account, or storage.
+
+Reusable deterministic JSON core: `src/community/document_line_break_audit_map.mjs`, API `runFeature(payload)`. This module is independently tested; application/UI integration is outside this change.
+
+Expose runFeature(payload) as a pure deterministic function. Input payload must be a plain object with locale and sections where locale is one of pt-br, en-us, es with case and surrounding whitespace normalized, and sections is an array of 1 to 100 objects with heading and text where heading is a string with non-empty trim and original length up to 200 UTF-16 units and text is a string with cumulative heading.length plus text.length up to 180000 UTF-16 units. Validation matches validateDocument and throws TypeError DOCUMENT_OBJECT_REQUIRED for non-object input, TypeError DOCUMENT_LOCALE_INVALID for bad locale, TypeError DOCUMENT_SECTIONS_INVALID for bad array, TypeError DOCUMENT_SECTION_INVALID for bad heading or text, and RangeError DOCUMENT_TOO_LARGE for overflow, without mutating input. On success iterate sections in order with for-of, building results with push and object literals and no indexed access. For each section define lineBreaks as count of U+000A LF characters in original text by single for-of pass, where each LF counts as one including the LF of each CRLF pair and lone U+000D CR counts as zero to match renderDocument br inserts; heading line breaks are ignored. Produce entry with index as zero-based integer and lineBreaks as integer. Compute totalLineBreaks as sum of lineBreaks. Return an object with locale, breaks and totalLineBreaks where locale is normalized, breaks has one entry per section in order, and totalLineBreaks equals sum. No HTML escaping, rendering, sanitization, I/O, network, inference, or clinical decision is performed. Output contains only locale and line-break numbers, never headings, full text, unknown fields, or identifiers. This remains a reusable local core, not the full SaaS.
+
+Examples (JSON input and expected output):
+
+```json
+{
+  "input": {
+    "locale": "pt-br",
+    "sections": [
+      {
+        "heading": "Exemplo",
+        "text": "Linha1\nLinha2\nLinha3"
+      },
+      {
+        "heading": "Notas",
+        "text": "Sem quebra"
+      }
+    ]
+  },
+  "output": {
+    "breaks": [
+      {
+        "index": 0,
+        "lineBreaks": 2
+      },
+      {
+        "index": 1,
+        "lineBreaks": 0
+      }
+    ],
+    "locale": "pt-br",
+    "totalLineBreaks": 2
+  }
+}
+```
+
+```json
+{
+  "input": {
+    "locale": " EN-US ",
+    "sections": [
+      {
+        "heading": "Intro",
+        "text": "Hi\r\nHo\nHey"
+      }
+    ]
+  },
+  "output": {
+    "breaks": [
+      {
+        "index": 0,
+        "lineBreaks": 2
+      }
+    ],
+    "locale": "en-us",
+    "totalLineBreaks": 2
+  }
+}
+```
+
+Public regression tests: `src/community_document_line_break_audit_map.test.js`.
