@@ -794,3 +794,83 @@ Examples (JSON input and expected output):
 ```
 
 Public regression tests: `src/community_document_sentence_terminator_map.test.js`.
+
+
+<!-- community-core:document-word-count-map -->
+### Deterministic section word count map for local review budgeting
+
+Lets local document tools estimate reading and layout effort without rendering HTML or copying full section text. It reuses existing document validation so only well-formed inputs are measured, counts whitespace-delimited words per section for local review planning and iteration budgeting, and stays fully deterministic with no clinical inference, file access, network activity, account, or storage.
+
+Reusable deterministic JSON core: `src/community/document_word_count_map.mjs`, API `runFeature(payload)`. This module is independently tested; application/UI integration is outside this change.
+
+Expose runFeature(payload) as a pure deterministic function. Input payload must be a plain object with locale and sections where locale is one of pt-br, en-us, es with case and surrounding whitespace normalized, and sections is an array of 1 to 100 objects with heading and text where heading is a string with non-empty trim and original length up to 200 UTF-16 units and text is a string with cumulative heading.length plus text.length up to 180000 UTF-16 units. Validation matches validateDocument and throws TypeError DOCUMENT_OBJECT_REQUIRED for non-object input, TypeError DOCUMENT_LOCALE_INVALID for bad locale, TypeError DOCUMENT_SECTIONS_INVALID for bad array, TypeError DOCUMENT_SECTION_INVALID for bad heading or text, and RangeError DOCUMENT_TOO_LARGE for overflow, without mutating input. On success iterate sections in order with for-of, building results with push and object literals and no indexed access. For each section define h as heading.trim() and count words in h and text where whitespace is exactly U+0020 SPACE, U+000A LF, U+000D CR or U+0009 TAB compared with strict equality, and a word is a maximal non-empty run of non-whitespace scanned with for-of tracking in-word state; empty or all-whitespace strings yield zero. Define headingWordCount as count in h, textWordCount as count in text, and wordCount as their sum. Produce entry with index as zero-based integer, headingWordCount, textWordCount and wordCount as integers. Compute totalHeadingWords, totalTextWords and totalWords as sums across sections. Return an object with locale, counts, totalHeadingWords, totalTextWords and totalWords where locale is normalized, counts has one entry per section in order, and totals equal sums. Implementation is a pure ES module with no imports and preserves input. No HTML escaping, rendering, sanitization, I/O, network, inference, or clinical decision is performed. Output contains only locale and word-count numbers, never headings, full text, unknown fields, or identifiers. This remains a reusable local core, not the full SaaS.
+
+Examples (JSON input and expected output):
+
+```json
+{
+  "input": {
+    "locale": "pt-br",
+    "sections": [
+      {
+        "heading": "  Exemplo  ",
+        "text": "Texto."
+      },
+      {
+        "heading": "Notas",
+        "text": "Mais texto"
+      }
+    ]
+  },
+  "output": {
+    "counts": [
+      {
+        "headingWordCount": 1,
+        "index": 0,
+        "textWordCount": 1,
+        "wordCount": 2
+      },
+      {
+        "headingWordCount": 1,
+        "index": 1,
+        "textWordCount": 2,
+        "wordCount": 3
+      }
+    ],
+    "locale": "pt-br",
+    "totalHeadingWords": 2,
+    "totalTextWords": 3,
+    "totalWords": 5
+  }
+}
+```
+
+```json
+{
+  "input": {
+    "locale": " EN-US ",
+    "sections": [
+      {
+        "heading": "  Case Notes  ",
+        "text": "hello   world wide"
+      }
+    ]
+  },
+  "output": {
+    "counts": [
+      {
+        "headingWordCount": 2,
+        "index": 0,
+        "textWordCount": 3,
+        "wordCount": 5
+      }
+    ],
+    "locale": "en-us",
+    "totalHeadingWords": 2,
+    "totalTextWords": 3,
+    "totalWords": 5
+  }
+}
+```
+
+Public regression tests: `src/community_document_word_count_map.test.js`.
