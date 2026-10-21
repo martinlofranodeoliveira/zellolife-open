@@ -1035,3 +1035,75 @@ Examples (JSON input and expected output):
 ```
 
 Public regression tests: `src/community_document_trim_delta_map.test.js`.
+
+
+<!-- community-core:document-heading-capital-flag-map -->
+### Deterministic heading capital flag map for local style review
+
+Lets local document tools check heading capitalization style for manual consistency review without rendering HTML or copying full section text. It reuses existing document validation so only well-formed inputs are measured, reports per-section capital flags plus totals for local iteration planning, and stays fully deterministic with no clinical inference, file access, network activity, account, or storage.
+
+Reusable deterministic JSON core: `src/community/document_heading_capital_flag_map.mjs`, API `runFeature(payload)`. This module is independently tested; application/UI integration is outside this change.
+
+Expose runFeature(payload) as a pure deterministic function. Input payload must be a plain object with locale and sections where locale is one of pt-br, en-us, es with case and surrounding whitespace normalized by trimming and lowercasing then compared with strict equality, and sections is an array of 1 to 100 objects with heading and text where heading is a string with non-empty trim and original length up to 200 UTF-16 units and text is a string with cumulative heading.length plus text.length up to 180000 UTF-16 units. Validation matches validateDocument and throws TypeError DOCUMENT_OBJECT_REQUIRED for non-object input, TypeError DOCUMENT_LOCALE_INVALID for bad locale, TypeError DOCUMENT_SECTIONS_INVALID for bad array, TypeError DOCUMENT_SECTION_INVALID for bad heading or text, and RangeError DOCUMENT_TOO_LARGE for overflow, without mutating input. On success iterate sections in order with for-of, building results with push and object literals and no indexed access. For each section define h as heading.trim() and obtain first character first by for-of over h with break on first iteration without aliasing builtins or passing builtins as callbacks; define capitalized as true when first.toUpperCase() strictly differs from first.toLowerCase() and first strictly equals first.toUpperCase(), otherwise false, so ASCII A-Z and cased accented capitals yield true while lowercase, digits, symbols and uncased scripts yield false. Produce entry with index as zero-based integer and capitalized as boolean. Compute capitalizedCount as number of entries where capitalized is true and nonCapitalizedCount as remainder. Return an object with locale, flags, capitalizedCount and nonCapitalizedCount where locale is normalized, flags has one entry per section in order, and totals equal sums. Implementation is a pure ES module exporting function runFeature(payload) with no imports, classes, async, this, reflection or mutable module variables and preserves input, using only for-of and Object.entries/Object.values without computed non-literal access, without aliasing builtins, without passing builtins as callbacks, without property assignment and without prototype access. No HTML escaping, rendering, sanitization, I/O, network, inference, or clinical decision is performed. Output contains only locale and capital boolean flags, never headings, full text, unknown fields, or identifiers. This remains a reusable local core, not the full SaaS.
+
+Examples (JSON input and expected output):
+
+```json
+{
+  "input": {
+    "locale": "pt-br",
+    "sections": [
+      {
+        "heading": "  Exemplo",
+        "text": "Texto."
+      },
+      {
+        "heading": "exemplo menor",
+        "text": "Mais texto"
+      }
+    ]
+  },
+  "output": {
+    "capitalizedCount": 1,
+    "flags": [
+      {
+        "capitalized": true,
+        "index": 0
+      },
+      {
+        "capitalized": false,
+        "index": 1
+      }
+    ],
+    "locale": "pt-br",
+    "nonCapitalizedCount": 1
+  }
+}
+```
+
+```json
+{
+  "input": {
+    "locale": " EN-US ",
+    "sections": [
+      {
+        "heading": "  Áudio  ",
+        "text": "Hi"
+      }
+    ]
+  },
+  "output": {
+    "capitalizedCount": 1,
+    "flags": [
+      {
+        "capitalized": true,
+        "index": 0
+      }
+    ],
+    "locale": "en-us",
+    "nonCapitalizedCount": 0
+  }
+}
+```
+
+Public regression tests: `src/community_document_heading_capital_flag_map.test.js`.
