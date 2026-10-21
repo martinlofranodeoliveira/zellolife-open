@@ -874,3 +874,83 @@ Examples (JSON input and expected output):
 ```
 
 Public regression tests: `src/community_document_word_count_map.test.js`.
+
+
+<!-- community-core:document-digit-count-map -->
+### Deterministic digit count map for local numeric density review
+
+Lets local document tools estimate numeric density and review effort without rendering HTML or copying full section text. It reuses existing document validation so only well-formed inputs are measured, counts ASCII digits per section for local layout and manual review budgeting, and stays fully deterministic with no clinical inference, file access, network activity, account, or storage.
+
+Reusable deterministic JSON core: `src/community/document_digit_count_map.mjs`, API `runFeature(payload)`. This module is independently tested; application/UI integration is outside this change.
+
+Expose runFeature(payload) as a pure deterministic function. Input payload must be a plain object with locale and sections where locale is one of pt-br, en-us, es with case and surrounding whitespace normalized, and sections is an array of 1 to 100 objects with heading and text where heading is a string with non-empty trim and original length up to 200 UTF-16 units and text is a string with cumulative heading.length plus text.length up to 180000 UTF-16 units. Validation matches validateDocument and throws TypeError DOCUMENT_OBJECT_REQUIRED for non-object input, TypeError DOCUMENT_LOCALE_INVALID for bad locale, TypeError DOCUMENT_SECTIONS_INVALID for bad array, TypeError DOCUMENT_SECTION_INVALID for bad heading or text, and RangeError DOCUMENT_TOO_LARGE for overflow, without mutating input. On success iterate sections in order with for-of, building results with push and object literals and no indexed access. For each section define h as heading.trim() and count ASCII digits in h and text where a digit is a character strictly equal to one of "0", "1", "2", "3", "4", "5", "6", "7", "8", "9" scanned with for-of using strict equality; empty or digit-free strings yield zero. Define headingDigitCount as count in h, textDigitCount as count in text, and digitCount as their sum. Produce entry with index as zero-based integer, headingDigitCount, textDigitCount and digitCount as integers. Compute totalHeadingDigits, totalTextDigits and totalDigits as sums across sections. Return an object with locale, counts, totalHeadingDigits, totalTextDigits and totalDigits where locale is normalized, counts has one entry per section in order, and totals equal sums. Implementation is a pure ES module with no imports and preserves input. No HTML escaping, rendering, sanitization, I/O, network, inference, or clinical decision is performed. Output contains only locale and digit-count numbers, never headings, full text, unknown fields, or identifiers. This remains a reusable local core, not the full SaaS.
+
+Examples (JSON input and expected output):
+
+```json
+{
+  "input": {
+    "locale": "pt-br",
+    "sections": [
+      {
+        "heading": "Exame 2024",
+        "text": "Pressao 120 por 80."
+      },
+      {
+        "heading": "Notas",
+        "text": "Sem digitos aqui"
+      }
+    ]
+  },
+  "output": {
+    "counts": [
+      {
+        "digitCount": 9,
+        "headingDigitCount": 4,
+        "index": 0,
+        "textDigitCount": 5
+      },
+      {
+        "digitCount": 0,
+        "headingDigitCount": 0,
+        "index": 1,
+        "textDigitCount": 0
+      }
+    ],
+    "locale": "pt-br",
+    "totalDigits": 9,
+    "totalHeadingDigits": 4,
+    "totalTextDigits": 5
+  }
+}
+```
+
+```json
+{
+  "input": {
+    "locale": " EN-US ",
+    "sections": [
+      {
+        "heading": "Intro",
+        "text": "Hi 7"
+      }
+    ]
+  },
+  "output": {
+    "counts": [
+      {
+        "digitCount": 1,
+        "headingDigitCount": 0,
+        "index": 0,
+        "textDigitCount": 1
+      }
+    ],
+    "locale": "en-us",
+    "totalDigits": 1,
+    "totalHeadingDigits": 0,
+    "totalTextDigits": 1
+  }
+}
+```
+
+Public regression tests: `src/community_document_digit_count_map.test.js`.
