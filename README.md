@@ -954,3 +954,84 @@ Examples (JSON input and expected output):
 ```
 
 Public regression tests: `src/community_document_digit_count_map.test.js`.
+
+
+<!-- community-core:document-trim-delta-map -->
+### Deterministic trim-delta map for local normalization review
+
+Lets local document tools predict heading normalization and edge-whitespace budgeting without rendering HTML or copying full section text. It reuses existing document validation so only well-formed inputs are measured, reports trimmed lengths and trim deltas for local layout planning, and stays fully deterministic with no clinical inference, file access, network activity, account, or storage.
+
+Reusable deterministic JSON core: `src/community/document_trim_delta_map.mjs`, API `runFeature(payload)`. This module is independently tested; application/UI integration is outside this change.
+
+Expose runFeature(payload) as a pure deterministic function. Input payload must be a plain object with locale and sections where locale is one of pt-br, en-us, es with case and surrounding whitespace normalized by trimming and lowercasing then compared with strict equality, and sections is an array of 1 to 100 objects with heading and text where heading is a string with non-empty trim and original length up to 200 UTF-16 units and text is a string with cumulative heading.length plus text.length up to 180000 UTF-16 units. Validation matches validateDocument and throws TypeError DOCUMENT_OBJECT_REQUIRED for non-object input, TypeError DOCUMENT_LOCALE_INVALID for bad locale, TypeError DOCUMENT_SECTIONS_INVALID for bad array, TypeError DOCUMENT_SECTION_INVALID for bad heading or text, and RangeError DOCUMENT_TOO_LARGE for overflow, without mutating input. On success iterate sections in order with for-of, building results with push and object literals and no indexed access. For each section define h as heading.trim() and t as text, define headingTrimmedLength as h.length, headingTrimDelta as heading.length minus h.length, textLength as t.length, and textEdgeTrimDelta as t.length minus t.trim().length, all measured in UTF-16 units (String.length) with empty edge-trim yielding zero. Produce entry with index as zero-based integer, headingTrimmedLength, headingTrimDelta, textLength and textEdgeTrimDelta as integers. Compute totalHeadingTrimDelta and totalTextEdgeTrimDelta as sums across sections. Return an object with locale, trims, totalHeadingTrimDelta and totalTextEdgeTrimDelta where locale is normalized, trims has one entry per section in order, and totals equal sums. Implementation is a pure ES module with no imports and preserves input. No HTML escaping, rendering, sanitization, I/O, network, inference, or clinical decision is performed. Output contains only locale and trim-delta numbers, never headings, full text, unknown fields, or identifiers. This remains a reusable local core, not the full SaaS.
+
+Examples (JSON input and expected output):
+
+```json
+{
+  "input": {
+    "locale": "pt-br",
+    "sections": [
+      {
+        "heading": "  Exemplo  ",
+        "text": "Texto."
+      },
+      {
+        "heading": "Notas",
+        "text": "  Mais texto  "
+      }
+    ]
+  },
+  "output": {
+    "locale": "pt-br",
+    "totalHeadingTrimDelta": 4,
+    "totalTextEdgeTrimDelta": 4,
+    "trims": [
+      {
+        "headingTrimDelta": 4,
+        "headingTrimmedLength": 7,
+        "index": 0,
+        "textEdgeTrimDelta": 0,
+        "textLength": 6
+      },
+      {
+        "headingTrimDelta": 0,
+        "headingTrimmedLength": 5,
+        "index": 1,
+        "textEdgeTrimDelta": 4,
+        "textLength": 14
+      }
+    ]
+  }
+}
+```
+
+```json
+{
+  "input": {
+    "locale": " EN-US ",
+    "sections": [
+      {
+        "heading": "Intro",
+        "text": "Hi\n"
+      }
+    ]
+  },
+  "output": {
+    "locale": "en-us",
+    "totalHeadingTrimDelta": 0,
+    "totalTextEdgeTrimDelta": 1,
+    "trims": [
+      {
+        "headingTrimDelta": 0,
+        "headingTrimmedLength": 5,
+        "index": 0,
+        "textEdgeTrimDelta": 1,
+        "textLength": 3
+      }
+    ]
+  }
+}
+```
+
+Public regression tests: `src/community_document_trim_delta_map.test.js`.
