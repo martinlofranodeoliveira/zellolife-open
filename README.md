@@ -643,3 +643,69 @@ Examples (JSON input and expected output):
 ```
 
 Public regression tests: `src/community_document_heading_length_map.test.js`.
+
+
+<!-- community-core:document-escape-budget-map -->
+### Deterministic HTML escape budget map for local size planning
+
+Lets local document tools estimate escaped HTML growth without rendering HTML or copying full text. It reuses existing document validation so only well-formed inputs are measured, counts escapable characters per section for local storage and layout budgeting, and stays fully deterministic with no clinical inference, file access, network activity, account, or storage.
+
+Reusable deterministic JSON core: `src/community/document_escape_budget_map.mjs`, API `runFeature(payload)`. This module is independently tested; application/UI integration is outside this change.
+
+Expose runFeature(payload) as a pure deterministic function. Input payload must be a plain object with locale and sections where locale is one of pt-br, en-us, es with case and surrounding whitespace normalized, and sections is an array of 1 to 100 objects with heading and text where heading is a string with non-empty trim and original length up to 200 UTF-16 units and text is a string with cumulative heading.length plus text.length up to 180000 UTF-16 units. Validation matches validateDocument and throws TypeError DOCUMENT_OBJECT_REQUIRED for non-object input, TypeError DOCUMENT_LOCALE_INVALID for bad locale, TypeError DOCUMENT_SECTIONS_INVALID for bad array, TypeError DOCUMENT_SECTION_INVALID for bad heading or text, and RangeError DOCUMENT_TOO_LARGE for overflow, without mutating input. On success iterate sections in order with for-of, building results with push and object literals and no indexed access. For each section define h as heading.trim() and scan h and text with for-of comparing each character with strict equality to count occurrences of U+0026, U+003C, U+003E, U+0022, and U+0027. Define escapeCount as total matches and escapedExtraChars as 4 per U+0026, 3 per U+003C, 3 per U+003E, 5 per U+0022, 4 per U+0027. Produce entry with index as zero-based integer, escapeCount as integer, and escapedExtraChars as integer. Compute totalEscapeCount as sum of escapeCounts and totalEscapedExtraChars as sum of extras. Return an object with locale, budgets, totalEscapeCount, and totalEscapedExtraChars where locale is normalized, budgets has one entry per section in order, and totals equal sums. Newlines count literally with no br conversion. No HTML escaping, rendering, sanitization, I/O, network, inference, or clinical decision is performed. Output contains only locale and escape-budget numbers, never headings, full text, unknown fields, or identifiers. Implementation is a pure ES module with no imports and preserves input. This remains a reusable local core, not the full SaaS.
+
+Examples (JSON input and expected output):
+
+```json
+{
+  "input": {
+    "locale": "pt-br",
+    "sections": [
+      {
+        "heading": "  A&B  ",
+        "text": "x<y>z"
+      }
+    ]
+  },
+  "output": {
+    "budgets": [
+      {
+        "escapeCount": 3,
+        "escapedExtraChars": 10,
+        "index": 0
+      }
+    ],
+    "locale": "pt-br",
+    "totalEscapeCount": 3,
+    "totalEscapedExtraChars": 10
+  }
+}
+```
+
+```json
+{
+  "input": {
+    "locale": " EN-US ",
+    "sections": [
+      {
+        "heading": "Intro",
+        "text": "Hi \"there\" & 'you'"
+      }
+    ]
+  },
+  "output": {
+    "budgets": [
+      {
+        "escapeCount": 5,
+        "escapedExtraChars": 22,
+        "index": 0
+      }
+    ],
+    "locale": "en-us",
+    "totalEscapeCount": 5,
+    "totalEscapedExtraChars": 22
+  }
+}
+```
+
+Public regression tests: `src/community_document_escape_budget_map.test.js`.
