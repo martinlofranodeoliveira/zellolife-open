@@ -440,3 +440,66 @@ Examples (JSON input and expected output):
 ```
 
 Public regression tests: `src/community_document_heading_duplicate_map.test.js`.
+
+
+<!-- community-core:document-blank-section-index -->
+### Deterministic blank-section index for local completion checks
+
+Lets local document tools flag empty or whitespace-only sections for completion checks without rendering HTML or copying section text. It reuses existing document validation so only well-formed inputs are inspected, reports ordered blank indexes and counts for local iteration, and stays fully deterministic with no clinical inference, file access, network activity, account, or storage.
+
+Reusable deterministic JSON core: `src/community/document_blank_section_index.mjs`, API `runFeature(payload)`. This module is independently tested; application/UI integration is outside this change.
+
+Expose runFeature(payload) as a pure deterministic function. Input payload must be a plain object with locale and sections where locale is one of pt-br, en-us, es with case and surrounding whitespace normalized, and sections is an array of 1 to 100 objects with heading and text where heading is a string with non-empty trim and original length up to 200 UTF-16 units and text is a string with cumulative heading.length plus text.length up to 180000 UTF-16 units. Validation matches validateDocument and throws TypeError DOCUMENT_OBJECT_REQUIRED for non-object input, TypeError DOCUMENT_LOCALE_INVALID for bad locale, TypeError DOCUMENT_SECTIONS_INVALID for bad array, TypeError DOCUMENT_SECTION_INVALID for bad heading or text, and RangeError DOCUMENT_TOO_LARGE for overflow, without mutating input. On success iterate sections in order with for-of, building results with push and object literals and no indexed access. For each section define isBlank as text.trim().length equals 0, collecting zero-based index when true. Return an object with locale, blankIndexes and blankCount where locale is normalized, blankIndexes is an array of zero-based integers in ascending order, and blankCount equals blankIndexes.length. No HTML escaping, rendering, sanitization, I/O, network, inference, or clinical decision is performed. Output contains only locale and blank indicators, never headings, full text, unknown fields, or identifiers. This remains a reusable local core, not the full SaaS.
+
+Examples (JSON input and expected output):
+
+```json
+{
+  "input": {
+    "locale": "pt-br",
+    "sections": [
+      {
+        "heading": "Exemplo",
+        "text": "Texto."
+      },
+      {
+        "heading": "Notas",
+        "text": "   "
+      },
+      {
+        "heading": "Fim",
+        "text": ""
+      }
+    ]
+  },
+  "output": {
+    "blankCount": 2,
+    "blankIndexes": [
+      1,
+      2
+    ],
+    "locale": "pt-br"
+  }
+}
+```
+
+```json
+{
+  "input": {
+    "locale": " EN-US ",
+    "sections": [
+      {
+        "heading": "Intro",
+        "text": "Hi"
+      }
+    ]
+  },
+  "output": {
+    "blankCount": 0,
+    "blankIndexes": [],
+    "locale": "en-us"
+  }
+}
+```
+
+Public regression tests: `src/community_document_blank_section_index.test.js`.
