@@ -1187,3 +1187,83 @@ Examples (JSON input and expected output):
 ```
 
 Public regression tests: `src/community_document_double_space_flag_map.test.js`.
+
+
+<!-- community-core:document-non-ascii-flag-map -->
+### Deterministic non-ASCII flag map for local encoding review
+
+Lets local document tools flag sections containing non-ASCII characters for manual encoding, portability and template review without rendering HTML or copying full section text. It reuses existing document validation so only well-formed inputs are measured, reports per-section flags plus totals for local iteration planning, and stays fully deterministic with no clinical inference, file access, network activity, account, or storage.
+
+Reusable deterministic JSON core: `src/community/document_non_ascii_flag_map.mjs`, API `runFeature(payload)`. This module is independently tested; application/UI integration is outside this change.
+
+Expose runFeature(payload) as a pure deterministic function. Input payload must be a plain object with locale and sections where locale is one of pt-br, en-us, es with case and surrounding whitespace normalized by trimming and lowercasing then compared with strict equality, and sections is an array of 1 to 100 objects with heading and text where heading is a string with non-empty trim and original length up to 200 UTF-16 units and text is a string with cumulative heading.length plus text.length up to 180000 UTF-16 units. Validation matches validateDocument and throws TypeError DOCUMENT_OBJECT_REQUIRED for non-object input, TypeError DOCUMENT_LOCALE_INVALID for bad locale, TypeError DOCUMENT_SECTIONS_INVALID for bad array, TypeError DOCUMENT_SECTION_INVALID for bad heading or text, and RangeError DOCUMENT_TOO_LARGE for overflow, without mutating input. On success iterate sections in order with for-of, building results with push and object literals and no indexed access. For each section define h as heading.trim() and t as text, and detect non-ASCII by iterating each for-of character of h and t with strict lexicographic test ch > tilde (U+007E) without aliasing builtins or passing builtins as callbacks, so code point 127 and above counts as non-ASCII and LF CR TAB count as ASCII; define headingHasNonAscii as true when h contains such character otherwise false, textHasNonAscii as true when t contains such character otherwise false, and hasNonAscii as their logical OR. Produce entry with index as zero-based integer, headingHasNonAscii, textHasNonAscii and hasNonAscii as booleans. Compute headingNonAsciiCount, textNonAsciiCount and nonAsciiSectionCount as counts across sections. Return an object with locale, flags, headingNonAsciiCount, textNonAsciiCount and nonAsciiSectionCount where locale is normalized, flags has one entry per section in order, and totals equal sums. Implementation is a pure ES module exporting function runFeature(payload) with no imports, classes, async, this, reflection or mutable module variables and preserves input, using only for-of and Object.entries/Object.values without computed non-literal access, without aliasing builtins, without passing builtins as callbacks, without property assignment and without prototype access. No HTML escaping, rendering, sanitization, I/O, network, inference, or clinical decision is performed. Output contains only locale and non-ASCII boolean flags, never headings, full text, unknown fields, or identifiers. This remains a reusable local core, not the full SaaS.
+
+Examples (JSON input and expected output):
+
+```json
+{
+  "input": {
+    "locale": "pt-br",
+    "sections": [
+      {
+        "heading": "  Exemplo  ",
+        "text": "Texto."
+      },
+      {
+        "heading": "Notas",
+        "text": "Mais texto com áudio"
+      }
+    ]
+  },
+  "output": {
+    "flags": [
+      {
+        "hasNonAscii": false,
+        "headingHasNonAscii": false,
+        "index": 0,
+        "textHasNonAscii": false
+      },
+      {
+        "hasNonAscii": true,
+        "headingHasNonAscii": false,
+        "index": 1,
+        "textHasNonAscii": true
+      }
+    ],
+    "headingNonAsciiCount": 0,
+    "locale": "pt-br",
+    "nonAsciiSectionCount": 1,
+    "textNonAsciiCount": 1
+  }
+}
+```
+
+```json
+{
+  "input": {
+    "locale": " EN-US ",
+    "sections": [
+      {
+        "heading": "Café",
+        "text": "Hi"
+      }
+    ]
+  },
+  "output": {
+    "flags": [
+      {
+        "hasNonAscii": true,
+        "headingHasNonAscii": true,
+        "index": 0,
+        "textHasNonAscii": false
+      }
+    ],
+    "headingNonAsciiCount": 1,
+    "locale": "en-us",
+    "nonAsciiSectionCount": 1,
+    "textNonAsciiCount": 0
+  }
+}
+```
+
+Public regression tests: `src/community_document_non_ascii_flag_map.test.js`.
