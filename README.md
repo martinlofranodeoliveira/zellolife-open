@@ -349,3 +349,94 @@ Examples (JSON input and expected output):
 ```
 
 Public regression tests: `src/community_document_section_offset_map.test.js`.
+
+
+<!-- community-core:document-heading-duplicate-map -->
+### Deterministic heading duplicate map for local navigation
+
+Lets local document tools disambiguate repeated headings when building navigation anchors without rendering HTML or copying heading text. It reuses existing document validation so only well-formed inputs are checked, reports exact first-occurrence indices deterministically for local TOC and anchor planning, and stays fully deterministic with no clinical inference, file access, network activity, account, or storage.
+
+Reusable deterministic JSON core: `src/community/document_heading_duplicate_map.mjs`, API `runFeature(payload)`. This module is independently tested; application/UI integration is outside this change.
+
+Expose runFeature(payload) as a pure deterministic function. Input payload must be a plain object with locale and sections where locale is one of pt-br, en-us, es with case and surrounding whitespace normalized, and sections is an array of 1 to 100 objects with heading and text where heading is a string with non-empty trim and original length up to 200 UTF-16 units and text is a string with cumulative heading.length plus text.length up to 180000 UTF-16 units. Validation matches validateDocument and throws TypeError DOCUMENT_OBJECT_REQUIRED for non-object input, TypeError DOCUMENT_LOCALE_INVALID for bad locale, TypeError DOCUMENT_SECTIONS_INVALID for bad array, TypeError DOCUMENT_SECTION_INVALID for bad heading or text, and RangeError DOCUMENT_TOO_LARGE for overflow, without mutating input. On success define trimmedHeading as heading.trim() per section in order. Track first occurrence with a Map from trimmedHeading to first index using for-of in order with Map get/set and no indexed access. For each section in order produce entry with index as zero-based integer, isDuplicate as boolean true when trimmedHeading was seen before, and firstIndex as integer of first occurrence. Return an object with locale, duplicates and uniqueCount where locale is normalized, duplicates has one entry per section in order, and uniqueCount equals Map size. No HTML escaping, rendering, sanitization, I/O, network, inference, or clinical decision is performed. Output contains only locale, duplicate triples and uniqueCount, never headings, full text, unknown fields, or identifiers. This remains a reusable local core, not the full SaaS.
+
+Examples (JSON input and expected output):
+
+```json
+{
+  "input": {
+    "locale": "pt-br",
+    "sections": [
+      {
+        "heading": "Resumo",
+        "text": "Texto um."
+      },
+      {
+        "heading": "Resumo",
+        "text": "Texto dois."
+      },
+      {
+        "heading": "  Resumo  ",
+        "text": "Texto tres."
+      }
+    ]
+  },
+  "output": {
+    "duplicates": [
+      {
+        "firstIndex": 0,
+        "index": 0,
+        "isDuplicate": false
+      },
+      {
+        "firstIndex": 0,
+        "index": 1,
+        "isDuplicate": true
+      },
+      {
+        "firstIndex": 0,
+        "index": 2,
+        "isDuplicate": true
+      }
+    ],
+    "locale": "pt-br",
+    "uniqueCount": 1
+  }
+}
+```
+
+```json
+{
+  "input": {
+    "locale": " EN-US ",
+    "sections": [
+      {
+        "heading": "Intro",
+        "text": "Hi"
+      },
+      {
+        "heading": "Notes",
+        "text": "Hello"
+      }
+    ]
+  },
+  "output": {
+    "duplicates": [
+      {
+        "firstIndex": 0,
+        "index": 0,
+        "isDuplicate": false
+      },
+      {
+        "firstIndex": 1,
+        "index": 1,
+        "isDuplicate": false
+      }
+    ],
+    "locale": "en-us",
+    "uniqueCount": 2
+  }
+}
+```
+
+Public regression tests: `src/community_document_heading_duplicate_map.test.js`.
