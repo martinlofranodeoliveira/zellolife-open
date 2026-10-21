@@ -709,3 +709,88 @@ Examples (JSON input and expected output):
 ```
 
 Public regression tests: `src/community_document_escape_budget_map.test.js`.
+
+
+<!-- community-core:document-sentence-terminator-map -->
+### Deterministic sentence-terminator count map for local iteration budgeting
+
+Lets local document tools estimate sentence-like iteration units without rendering HTML or copying full section text. It reuses existing document validation so only well-formed inputs are measured, counts period, exclamation and question marks per section for local display and iteration budgeting, and stays fully deterministic with no clinical inference, file access, network activity, account, or storage.
+
+Reusable deterministic JSON core: `src/community/document_sentence_terminator_map.mjs`, API `runFeature(payload)`. This module is independently tested; application/UI integration is outside this change.
+
+Expose runFeature(payload) as a pure deterministic function. Input payload must be a plain object with locale and sections where locale is one of pt-br, en-us, es with case and surrounding whitespace normalized, and sections is an array of 1 to 100 objects with heading and text where heading is a string with non-empty trim and original length up to 200 UTF-16 units and text is a string with cumulative heading.length plus text.length up to 180000 UTF-16 units. Validation matches validateDocument and throws TypeError DOCUMENT_OBJECT_REQUIRED for non-object input, TypeError DOCUMENT_LOCALE_INVALID for bad locale, TypeError DOCUMENT_SECTIONS_INVALID for bad array, TypeError DOCUMENT_SECTION_INVALID for bad heading or text, and RangeError DOCUMENT_TOO_LARGE for overflow, without mutating input. On success iterate sections in order with for-of, building results with push and object literals and no indexed access. For each section define h as heading.trim() and scan h and text with for-of comparing each character with strict equality to count U+002E FULL STOP, U+0021 EXCLAMATION MARK and U+003F QUESTION MARK. Define periodCount as count of U+002E, exclamationCount as count of U+0021, questionCount as count of U+003F, and terminatorCount as their sum. Produce entry with index as zero-based integer, periodCount, exclamationCount, questionCount and terminatorCount as integers. Compute totalPeriodCount, totalExclamationCount, totalQuestionCount and totalTerminatorCount as sums across sections. Return an object with locale, counts, totalPeriodCount, totalExclamationCount, totalQuestionCount and totalTerminatorCount where locale is normalized, counts has one entry per section in order, and totals equal sums. Implementation is a pure ES module with no imports and preserves input. No HTML escaping, rendering, sanitization, I/O, network, inference, or clinical decision is performed. Output contains only locale and terminator-count numbers, never headings, full text, unknown fields, or identifiers. This remains a reusable local core, not the full SaaS.
+
+Examples (JSON input and expected output):
+
+```json
+{
+  "input": {
+    "locale": "pt-br",
+    "sections": [
+      {
+        "heading": "  Exemplo  ",
+        "text": "Texto. Mais texto! Duvida?"
+      },
+      {
+        "heading": "Notas",
+        "text": "Sem terminador"
+      }
+    ]
+  },
+  "output": {
+    "counts": [
+      {
+        "exclamationCount": 1,
+        "index": 0,
+        "periodCount": 1,
+        "questionCount": 1,
+        "terminatorCount": 3
+      },
+      {
+        "exclamationCount": 0,
+        "index": 1,
+        "periodCount": 0,
+        "questionCount": 0,
+        "terminatorCount": 0
+      }
+    ],
+    "locale": "pt-br",
+    "totalExclamationCount": 1,
+    "totalPeriodCount": 1,
+    "totalQuestionCount": 1,
+    "totalTerminatorCount": 3
+  }
+}
+```
+
+```json
+{
+  "input": {
+    "locale": " EN-US ",
+    "sections": [
+      {
+        "heading": "Intro",
+        "text": "Hi... Really? Yes!"
+      }
+    ]
+  },
+  "output": {
+    "counts": [
+      {
+        "exclamationCount": 1,
+        "index": 0,
+        "periodCount": 3,
+        "questionCount": 1,
+        "terminatorCount": 5
+      }
+    ],
+    "locale": "en-us",
+    "totalExclamationCount": 1,
+    "totalPeriodCount": 3,
+    "totalQuestionCount": 1,
+    "totalTerminatorCount": 5
+  }
+}
+```
+
+Public regression tests: `src/community_document_sentence_terminator_map.test.js`.
