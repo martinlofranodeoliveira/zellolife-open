@@ -1267,3 +1267,85 @@ Examples (JSON input and expected output):
 ```
 
 Public regression tests: `src/community_document_non_ascii_flag_map.test.js`.
+
+
+<!-- community-core:document-tab-count-map -->
+### Deterministic tab count map for local layout review
+
+Lets local document tools spot TAB characters for manual layout, portability and template review without rendering HTML or copying full section text. It reuses existing document validation so only well-formed inputs are measured, reports per-section TAB counts plus totals for local iteration planning, and stays fully deterministic with no clinical inference, file access, network activity, account, or storage.
+
+Reusable deterministic JSON core: `src/community/document_tab_count_map.mjs`, API `runFeature(payload)`. This module is independently tested; application/UI integration is outside this change.
+
+Expose runFeature(payload) as a pure deterministic function. Input payload must be a plain object with locale and sections where locale is one of pt-br, en-us, es with case and surrounding whitespace normalized by trimming and lowercasing then compared with strict equality, and sections is an array of 1 to 100 objects with heading and text where heading is a string with non-empty trim and original length up to 200 UTF-16 units and text is a string with cumulative heading.length plus text.length up to 180000 UTF-16 units. Validation matches validateDocument and throws TypeError DOCUMENT_OBJECT_REQUIRED for non-object input, TypeError DOCUMENT_LOCALE_INVALID for bad locale, TypeError DOCUMENT_SECTIONS_INVALID for bad array, TypeError DOCUMENT_SECTION_INVALID for bad heading or text, and RangeError DOCUMENT_TOO_LARGE for overflow, without mutating input. On success iterate sections in order with for-of, building results with push and object literals and no indexed access. For each section define h as heading.trim() and t as text, and count TAB characters by iterating each for-of character of h and t with strict equality against U+0009 TAB without aliasing builtins or passing builtins as callbacks; define headingTabCount as TABs in h, textTabCount as TABs in t, and tabCount as their sum. Produce entry with index as zero-based integer, headingTabCount, textTabCount and tabCount. Compute totalTabCount, totalHeadingTabCount and totalTextTabCount as sums across sections and tabSectionCount as number of entries where tabCount is greater than zero. Return an object with locale, counts, totalTabCount, totalHeadingTabCount, totalTextTabCount and tabSectionCount where locale is normalized, counts has one entry per section in order, and totals equal sums. Implementation is a pure ES module exporting function runFeature(payload) with no imports, classes, async, this, reflection or mutable module variables and preserves input, using only for-of and Object.entries and Object.values and Map get/set without computed non-literal access, without aliasing builtins, without passing builtins as callbacks, without reassignment of function or builtin identifiers, without property assignment/update/delete and without Object.assign or Object.create and without prototype or constructor access, building objects with object literals or Object.fromEntries and arrays with push. No HTML escaping, rendering, sanitization, I/O, network, inference, or clinical decision is performed. Output contains only locale and TAB counts, never headings, full text, unknown fields, or identifiers. This remains a reusable local core, not the full SaaS.
+
+Examples (JSON input and expected output):
+
+```json
+{
+  "input": {
+    "locale": "pt-br",
+    "sections": [
+      {
+        "heading": "Exemplo",
+        "text": "A\tB"
+      },
+      {
+        "heading": "Notas",
+        "text": "Sem tabs"
+      }
+    ]
+  },
+  "output": {
+    "counts": [
+      {
+        "headingTabCount": 0,
+        "index": 0,
+        "tabCount": 1,
+        "textTabCount": 1
+      },
+      {
+        "headingTabCount": 0,
+        "index": 1,
+        "tabCount": 0,
+        "textTabCount": 0
+      }
+    ],
+    "locale": "pt-br",
+    "tabSectionCount": 1,
+    "totalHeadingTabCount": 0,
+    "totalTabCount": 1,
+    "totalTextTabCount": 1
+  }
+}
+```
+
+```json
+{
+  "input": {
+    "locale": " EN-US ",
+    "sections": [
+      {
+        "heading": "Intro\tX",
+        "text": "Hi"
+      }
+    ]
+  },
+  "output": {
+    "counts": [
+      {
+        "headingTabCount": 1,
+        "index": 0,
+        "tabCount": 1,
+        "textTabCount": 0
+      }
+    ],
+    "locale": "en-us",
+    "tabSectionCount": 1,
+    "totalHeadingTabCount": 1,
+    "totalTabCount": 1,
+    "totalTextTabCount": 0
+  }
+}
+```
+
+Public regression tests: `src/community_document_tab_count_map.test.js`.
