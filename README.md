@@ -1574,3 +1574,78 @@ Examples (JSON input and expected output):
 ```
 
 Public regression tests: `src/community_document_bullet_marker_flag_map.test.js`.
+
+
+<!-- community-core:document-ellipsis-flag-map -->
+### Deterministic ellipsis flag map for local truncation review
+
+Lets local document tools flag ellipsis markers that often signal truncated, placeholder, or hesitant text for manual template and completeness review without rendering HTML or copying full section text. It reuses existing document validation so only well-formed inputs are measured, reports per-section ellipsis counts with presence flags plus corpus totals for local iteration planning, and stays fully deterministic with no clinical inference, file access, network activity, account, or storage.
+
+Reusable deterministic JSON core: `src/community/document_ellipsis_flag_map.mjs`, API `runFeature(payload)`. This module is independently tested; application/UI integration is outside this change.
+
+Expose runFeature(payload) as a pure deterministic function. Input payload must be a plain object with locale and sections where locale is one of pt-br, en-us, es with case and surrounding whitespace normalized by trimming and lowercasing then compared with strict equality, and sections is an array of 1 to 100 objects with heading and text where heading is a string with non-empty trim and original length up to 200 UTF-16 units and text is a string with cumulative heading.length plus text.length up to 180000 UTF-16 units. Validation matches validateDocument and throws TypeError DOCUMENT_OBJECT_REQUIRED for non-object input, TypeError DOCUMENT_LOCALE_INVALID for bad locale, TypeError DOCUMENT_SECTIONS_INVALID for bad array, TypeError DOCUMENT_SECTION_INVALID for bad heading or text, and RangeError DOCUMENT_TOO_LARGE for overflow, without mutating input. On success iterate sections in order with for-of, building results with push and object literals and no indexed access. For each section define h as heading.trim() and t as text, and scan h then t in order character by character with for-of and strict equality without aliasing builtins or passing builtins as callbacks. Count each U+2026 HORIZONTAL ELLIPSIS as one and each non-overlapping occurrence of three consecutive U+002E FULL STOP as one by tracking consecutivePeriods reset to zero between h and t and on any non-period character, incrementing ellipsisCount and resetting consecutivePeriods to zero when it reaches three and incrementing for each U+2026; define hasEllipsis as ellipsisCount greater than zero. Produce entry with index as zero-based integer, ellipsisCount as integer and hasEllipsis as boolean. Compute ellipsisSectionCount as number of entries where hasEllipsis is true and totalEllipsisCount as sum of ellipsisCount across entries. Return an object with locale, entries, ellipsisSectionCount and totalEllipsisCount where locale is normalized, entries has one entry per section in order, and totals equal sums. Implementation is a pure ES module exporting function runFeature(payload) with no imports, classes, async, this, reflection or mutable module variables and preserves input, using only for-of and Object.entries and Object.values without computed non-literal access, without aliasing builtins, without passing builtins as callbacks, without reassignment of function or builtin identifiers, without property assignment/update/delete and without Object.assign or Object.create and without prototype or constructor access, building objects with object literals or Object.fromEntries and arrays with push and maps with set. No HTML escaping, rendering, sanitization, I/O, network, inference, or clinical decision is performed. Output contains only locale and ellipsis counts and flags, never headings, full text, unknown fields, or identifiers. This remains a reusable local core, not the full SaaS.
+
+Examples (JSON input and expected output):
+
+```json
+{
+  "input": {
+    "locale": "pt-br",
+    "sections": [
+      {
+        "heading": "  Exemplo  ",
+        "text": "Texto com ... truncado"
+      },
+      {
+        "heading": "Notas",
+        "text": "Sem marcas"
+      }
+    ]
+  },
+  "output": {
+    "ellipsisSectionCount": 1,
+    "entries": [
+      {
+        "ellipsisCount": 1,
+        "hasEllipsis": true,
+        "index": 0
+      },
+      {
+        "ellipsisCount": 0,
+        "hasEllipsis": false,
+        "index": 1
+      }
+    ],
+    "locale": "pt-br",
+    "totalEllipsisCount": 1
+  }
+}
+```
+
+```json
+{
+  "input": {
+    "locale": " EN-US ",
+    "sections": [
+      {
+        "heading": "Intro",
+        "text": "Hi … there... end"
+      }
+    ]
+  },
+  "output": {
+    "ellipsisSectionCount": 1,
+    "entries": [
+      {
+        "ellipsisCount": 2,
+        "hasEllipsis": true,
+        "index": 0
+      }
+    ],
+    "locale": "en-us",
+    "totalEllipsisCount": 2
+  }
+}
+```
+
+Public regression tests: `src/community_document_ellipsis_flag_map.test.js`.
