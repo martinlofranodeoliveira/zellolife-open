@@ -1649,3 +1649,88 @@ Examples (JSON input and expected output):
 ```
 
 Public regression tests: `src/community_document_ellipsis_flag_map.test.js`.
+
+
+<!-- community-core:document-parenthesis-count-map -->
+### Deterministic parenthesis count map for local aside review
+
+Lets local document tools spot parenthetical asides that often hold abbreviations, clarifications, or inserted values for manual template and completeness review without rendering HTML or copying full section text. It reuses existing document validation so only well-formed inputs are measured, reports per-section open and close counts with presence and balance flags plus corpus totals for local iteration planning, and stays fully deterministic with no clinical inference, file access, network activity, account, or storage.
+
+Reusable deterministic JSON core: `src/community/document_parenthesis_count_map.mjs`, API `runFeature(payload)`. This module is independently tested; application/UI integration is outside this change.
+
+Expose runFeature(payload) as a pure deterministic function. Input payload must be a plain object with locale and sections where locale is one of pt-br, en-us, es with case and surrounding whitespace normalized by trimming and lowercasing then compared with strict equality, and sections is an array of 1 to 100 objects with heading and text where heading is a string with non-empty trim and original length up to 200 UTF-16 units and text is a string with cumulative heading.length plus text.length up to 180000 UTF-16 units. Validation matches validateDocument and throws TypeError DOCUMENT_OBJECT_REQUIRED for non-object input, TypeError DOCUMENT_LOCALE_INVALID for bad locale, TypeError DOCUMENT_SECTIONS_INVALID for bad array, TypeError DOCUMENT_SECTION_INVALID for bad heading or text, and RangeError DOCUMENT_TOO_LARGE for overflow, without mutating input. On success iterate sections in order with for-of, building results with push and object literals and no indexed access. For each section define h as heading.trim() and t as text, and count U+0028 LEFT PARENTHESIS as openCount and U+0029 RIGHT PARENTHESIS as closeCount by iterating each for-of character of h then t with strict equality without aliasing builtins or passing builtins as callbacks; define hasParenthesis as openCount plus closeCount greater than zero and isBalanced as openCount strict equal closeCount. Produce entry with index as zero-based integer, openCount as integer, closeCount as integer, hasParenthesis as boolean and isBalanced as boolean. Compute parenthesisSectionCount as number of entries where hasParenthesis is true and totalOpenCount as sum of openCount across entries and totalCloseCount as sum of closeCount across entries and unbalancedSectionCount as number of entries where isBalanced is false. Return an object with locale, entries, parenthesisSectionCount, totalOpenCount, totalCloseCount and unbalancedSectionCount where locale is normalized, entries has one entry per section in order, and totals equal sums. Implementation is a pure ES module exporting function runFeature(payload) with no imports, classes, async, this, reflection or mutable module variables and preserves input, using only for-of and Object.entries and Object.values without computed non-literal access, without aliasing builtins, without passing builtins as callbacks, without reassignment of function or builtin identifiers, without property assignment/update/delete and without Object.assign or Object.create and without prototype or constructor access, building objects with object literals or Object.fromEntries and arrays with push and maps with set. No HTML escaping, rendering, sanitization, I/O, network, inference, or clinical decision is performed. Output contains only locale and parenthesis counts and flags, never headings, full text, unknown fields, or identifiers. This remains a reusable local core, not the full SaaS.
+
+Examples (JSON input and expected output):
+
+```json
+{
+  "input": {
+    "locale": "pt-br",
+    "sections": [
+      {
+        "heading": "  Exemplo  ",
+        "text": "Valor (alto) e (baixo)."
+      },
+      {
+        "heading": "Notas",
+        "text": "Sem marcas"
+      }
+    ]
+  },
+  "output": {
+    "entries": [
+      {
+        "closeCount": 2,
+        "hasParenthesis": true,
+        "index": 0,
+        "isBalanced": true,
+        "openCount": 2
+      },
+      {
+        "closeCount": 0,
+        "hasParenthesis": false,
+        "index": 1,
+        "isBalanced": true,
+        "openCount": 0
+      }
+    ],
+    "locale": "pt-br",
+    "parenthesisSectionCount": 1,
+    "totalCloseCount": 2,
+    "totalOpenCount": 2,
+    "unbalancedSectionCount": 0
+  }
+}
+```
+
+```json
+{
+  "input": {
+    "locale": " EN-US ",
+    "sections": [
+      {
+        "heading": "Intro",
+        "text": "Hi (oops"
+      }
+    ]
+  },
+  "output": {
+    "entries": [
+      {
+        "closeCount": 0,
+        "hasParenthesis": true,
+        "index": 0,
+        "isBalanced": false,
+        "openCount": 1
+      }
+    ],
+    "locale": "en-us",
+    "parenthesisSectionCount": 1,
+    "totalCloseCount": 0,
+    "totalOpenCount": 1,
+    "unbalancedSectionCount": 1
+  }
+}
+```
+
+Public regression tests: `src/community_document_parenthesis_count_map.test.js`.
