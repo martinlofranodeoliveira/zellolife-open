@@ -1424,3 +1424,78 @@ Examples (JSON input and expected output):
 ```
 
 Public regression tests: `src/community_document_at_sign_flag_map.test.js`.
+
+
+<!-- community-core:document-long-token-flag-map -->
+### Deterministic long-token flag map for local wrapping review
+
+Lets local document tools spot unbroken tokens that can overflow fixed-width layout or wrapping budgets without rendering HTML or copying full section text. It reuses existing document validation so only well-formed inputs are measured, reports per-section maximum token length with a 30-unit flag plus totals for local review planning, and stays fully deterministic with no clinical inference, file access, network activity, account, or storage.
+
+Reusable deterministic JSON core: `src/community/document_long_token_flag_map.mjs`, API `runFeature(payload)`. This module is independently tested; application/UI integration is outside this change.
+
+Expose runFeature(payload) as a pure deterministic function. Input payload must be a plain object with locale and sections where locale is one of pt-br, en-us, es with case and surrounding whitespace normalized by trimming and lowercasing then compared with strict equality, and sections is an array of 1 to 100 objects with heading and text where heading is a string with non-empty trim and original length up to 200 UTF-16 units and text is a string with cumulative heading.length plus text.length up to 180000 UTF-16 units. Validation matches validateDocument and throws TypeError DOCUMENT_OBJECT_REQUIRED for non-object input, TypeError DOCUMENT_LOCALE_INVALID for bad locale, TypeError DOCUMENT_SECTIONS_INVALID for bad array, TypeError DOCUMENT_SECTION_INVALID for bad heading or text, and RangeError DOCUMENT_TOO_LARGE for overflow, without mutating input. On success iterate sections in order with for-of, building results with push and object literals and no indexed access. For each section define h as heading.trim() and t as text, and measure the longest unbroken token across h then t by iterating each for-of character and testing strict equality against U+0020 SPACE, U+000A LF, U+000D CR and U+0009 TAB as separators without aliasing builtins or passing builtins as callbacks; maintain current run length reset to zero on a separator else incremented by one and retain the maximum seen, starting from zero so the boundary between h and t acts as a separator and empty text contributes no token; define maxTokenLength as that maximum and hasLongToken as maxTokenLength greater than or equal to 30. Produce entry with index as zero-based integer, maxTokenLength as integer and hasLongToken as boolean. Compute longTokenSectionCount as number of entries where hasLongToken is true and longestTokenLength as maximum maxTokenLength across entries. Return an object with locale, entries, longTokenSectionCount and longestTokenLength where locale is normalized, entries has one entry per section in order, and totals equal sums and maxima. Implementation is a pure ES module exporting function runFeature(payload) with no imports, classes, async, this, reflection or mutable module variables and preserves input, using only for-of and Object.entries and Object.values and Map get/set without computed non-literal access, without aliasing builtins, without passing builtins as callbacks, without reassignment of function or builtin identifiers, without property assignment/update/delete and without Object.assign or Object.create and without prototype or constructor access, building objects with object literals or Object.fromEntries and arrays with push and maps with set. No HTML escaping, rendering, sanitization, I/O, network, inference, or clinical decision is performed. Output contains only locale and token lengths and flags, never headings, full text, unknown fields, or identifiers. This remains a reusable local core, not the full SaaS.
+
+Examples (JSON input and expected output):
+
+```json
+{
+  "input": {
+    "locale": "pt-br",
+    "sections": [
+      {
+        "heading": "Exemplo",
+        "text": "Texto curto."
+      },
+      {
+        "heading": "Notas",
+        "text": "Supercalifragilisticexpialidocious plus"
+      }
+    ]
+  },
+  "output": {
+    "entries": [
+      {
+        "hasLongToken": false,
+        "index": 0,
+        "maxTokenLength": 7
+      },
+      {
+        "hasLongToken": true,
+        "index": 1,
+        "maxTokenLength": 34
+      }
+    ],
+    "locale": "pt-br",
+    "longTokenSectionCount": 1,
+    "longestTokenLength": 34
+  }
+}
+```
+
+```json
+{
+  "input": {
+    "locale": " EN-US ",
+    "sections": [
+      {
+        "heading": "Intro",
+        "text": "123456789012345678901234567890 end"
+      }
+    ]
+  },
+  "output": {
+    "entries": [
+      {
+        "hasLongToken": true,
+        "index": 0,
+        "maxTokenLength": 30
+      }
+    ],
+    "locale": "en-us",
+    "longTokenSectionCount": 1,
+    "longestTokenLength": 30
+  }
+}
+```
+
+Public regression tests: `src/community_document_long_token_flag_map.test.js`.
