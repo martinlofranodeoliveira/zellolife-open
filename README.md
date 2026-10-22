@@ -1499,3 +1499,78 @@ Examples (JSON input and expected output):
 ```
 
 Public regression tests: `src/community_document_long_token_flag_map.test.js`.
+
+
+<!-- community-core:document-bullet-marker-flag-map -->
+### Deterministic bullet marker flag map for local list review
+
+Lets local document tools spot bullet-like lines starting with dash-space, star-space or plus-space at column zero for manual list and layout review without rendering HTML or copying full section text. It reuses existing document validation so only well-formed inputs are measured, reports per-section bullet line counts with presence flags plus corpus totals for local iteration planning, and stays fully deterministic with no clinical inference, file access, network activity, account, or storage.
+
+Reusable deterministic JSON core: `src/community/document_bullet_marker_flag_map.mjs`, API `runFeature(payload)`. This module is independently tested; application/UI integration is outside this change.
+
+Expose runFeature(payload) as a pure deterministic function. Input payload must be a plain object with locale and sections where locale is one of pt-br, en-us, es with case and surrounding whitespace normalized by trimming and lowercasing then compared with strict equality, and sections is an array of 1 to 100 objects with heading and text where heading is a string with non-empty trim and original length up to 200 UTF-16 units and text is a string with cumulative heading.length plus text.length up to 180000 UTF-16 units. Validation matches validateDocument and throws TypeError DOCUMENT_OBJECT_REQUIRED for non-object input, TypeError DOCUMENT_LOCALE_INVALID for bad locale, TypeError DOCUMENT_SECTIONS_INVALID for bad array, TypeError DOCUMENT_SECTION_INVALID for bad heading or text, and RangeError DOCUMENT_TOO_LARGE for overflow, without mutating input. On success iterate sections in order with for-of, building results with push and object literals and no indexed access. For each section define h as heading.trim() and t as text, and scan h then a virtual newline then t character by character with for-of and strict equality without aliasing builtins or passing builtins as callbacks. Track atLineStart, linePos and firstChar; U+000A and U+000D each reset to line start; otherwise if atLineStart and linePos strict equal 0 store firstChar and advance, else if atLineStart and linePos strict equal 1 then if firstChar is U+002D or U+002A or U+002B and current char is U+0020 increment bulletLineCount then mark line as consumed, else mark line as consumed with no count; otherwise ignore. Define bulletLineCount as number of lines whose first two columns are exactly dash-space, star-space or plus-space at column zero with no leading whitespace, and hasBullet as bulletLineCount greater than zero. Produce entry with index as zero-based integer, hasBullet as boolean and bulletLineCount as integer. Compute bulletSectionCount as number of entries where hasBullet is true and totalBulletLineCount as sum of bulletLineCount. Return an object with locale, entries, bulletSectionCount and totalBulletLineCount where locale is normalized, entries has one entry per section in order, and totals equal sums. Implementation is a pure ES module exporting function runFeature(payload) with no imports, classes, async, this, reflection or mutable module variables and preserves input, using only for-of and Object.entries and Object.values without computed non-literal access, without aliasing builtins, without passing builtins as callbacks, without reassignment of function or builtin identifiers, without property assignment/update/delete and without Object.assign or Object.create and without prototype or constructor access, building objects with object literals or Object.fromEntries and arrays with push and maps with set. No HTML escaping, rendering, sanitization, I/O, network, inference, or clinical decision is performed. Output contains only locale and bullet flags and counts, never headings, full text, unknown fields, or identifiers. This remains a reusable local core, not the full SaaS.
+
+Examples (JSON input and expected output):
+
+```json
+{
+  "input": {
+    "locale": "pt-br",
+    "sections": [
+      {
+        "heading": "Exemplo",
+        "text": "Intro\n- item um\n- item dois\nFim"
+      },
+      {
+        "heading": "Notas",
+        "text": "Sem lista"
+      }
+    ]
+  },
+  "output": {
+    "bulletSectionCount": 1,
+    "entries": [
+      {
+        "bulletLineCount": 2,
+        "hasBullet": true,
+        "index": 0
+      },
+      {
+        "bulletLineCount": 0,
+        "hasBullet": false,
+        "index": 1
+      }
+    ],
+    "locale": "pt-br",
+    "totalBulletLineCount": 2
+  }
+}
+```
+
+```json
+{
+  "input": {
+    "locale": " EN-US ",
+    "sections": [
+      {
+        "heading": "Intro",
+        "text": "* item\nplain"
+      }
+    ]
+  },
+  "output": {
+    "bulletSectionCount": 1,
+    "entries": [
+      {
+        "bulletLineCount": 1,
+        "hasBullet": true,
+        "index": 0
+      }
+    ],
+    "locale": "en-us",
+    "totalBulletLineCount": 1
+  }
+}
+```
+
+Public regression tests: `src/community_document_bullet_marker_flag_map.test.js`.
