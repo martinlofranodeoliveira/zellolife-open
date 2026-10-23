@@ -1909,3 +1909,78 @@ Examples (JSON input and expected output):
 ```
 
 Public regression tests: `src/community_document_text_duplicate_map.test.js`.
+
+
+<!-- community-core:document-uppercase-count-map -->
+### Deterministic uppercase count map for local acronym review
+
+Lets local document tools spot uppercase usage that signals acronyms, initialisms and emphasis for manual structure and completeness review without rendering HTML or copying full section text. It reuses existing document validation so only well-formed inputs are measured, reports per-section uppercase counts with presence flags plus corpus totals for local iteration planning, and stays fully deterministic with no clinical inference, file access, network activity, account, or storage.
+
+Reusable deterministic JSON core: `src/community/document_uppercase_count_map.mjs`, API `runFeature(payload)`. This module is independently tested; application/UI integration is outside this change.
+
+Expose runFeature(payload) as a pure deterministic function. Input payload must be a plain object with locale and sections where locale is one of pt-br, en-us, es with case and surrounding whitespace normalized by trimming and lowercasing then compared with strict equality, and sections is an array of 1 to 100 objects with heading and text where heading is a string with non-empty trim and original length up to 200 UTF-16 units and text is a string with cumulative heading.length plus text.length up to 180000 UTF-16 units. Validation matches validateDocument and throws TypeError DOCUMENT_OBJECT_REQUIRED for non-object input, TypeError DOCUMENT_LOCALE_INVALID for bad locale, TypeError DOCUMENT_SECTIONS_INVALID for bad array, TypeError DOCUMENT_SECTION_INVALID for bad heading or text, and RangeError DOCUMENT_TOO_LARGE for overflow, without mutating input. On success iterate sections in order with for-of, building results with push and object literals and no indexed access. For each section define h as heading.trim() and t as text, and count ASCII uppercase A-Z by iterating each for-of character of h then t with lexicographic range comparison against "A" and "Z" without aliasing builtins or passing builtins as callbacks; define uppercaseCount as that total and hasUppercase as uppercaseCount greater than zero. Produce entry with index as zero-based integer, uppercaseCount as integer and hasUppercase as boolean. Compute uppercaseSectionCount as number of entries where hasUppercase is true and totalUppercaseCount as sum of uppercaseCount across entries. Return an object with locale, entries, uppercaseSectionCount and totalUppercaseCount where locale is normalized, entries has one entry per section in order, and totals equal sums. Implementation is a pure ES module exporting function runFeature(payload) with no imports, classes, async, this, reflection or mutable module variables and preserves input, using only for-of and Object.entries and Object.values without computed non-literal access, without aliasing builtins, without passing builtins as callbacks, without reassignment of function or builtin identifiers, without property assignment/update/delete and without Object.assign or Object.create and without prototype or constructor access, building objects with object literals or Object.fromEntries and arrays with push and maps with set. No HTML escaping, rendering, sanitization, I/O, network, inference, or clinical decision is performed. Output contains only locale and uppercase counts and flags, never headings, full text, unknown fields, or identifiers. This remains a reusable local core, not the full SaaS.
+
+Examples (JSON input and expected output):
+
+```json
+{
+  "input": {
+    "locale": "pt-br",
+    "sections": [
+      {
+        "heading": "  Exemplo  ",
+        "text": "Texto ABC."
+      },
+      {
+        "heading": "Notas",
+        "text": "sem caixa alta"
+      }
+    ]
+  },
+  "output": {
+    "entries": [
+      {
+        "hasUppercase": true,
+        "index": 0,
+        "uppercaseCount": 5
+      },
+      {
+        "hasUppercase": true,
+        "index": 1,
+        "uppercaseCount": 1
+      }
+    ],
+    "locale": "pt-br",
+    "totalUppercaseCount": 6,
+    "uppercaseSectionCount": 2
+  }
+}
+```
+
+```json
+{
+  "input": {
+    "locale": " EN-US ",
+    "sections": [
+      {
+        "heading": "Intro",
+        "text": "Hi"
+      }
+    ]
+  },
+  "output": {
+    "entries": [
+      {
+        "hasUppercase": true,
+        "index": 0,
+        "uppercaseCount": 2
+      }
+    ],
+    "locale": "en-us",
+    "totalUppercaseCount": 2,
+    "uppercaseSectionCount": 1
+  }
+}
+```
+
+Public regression tests: `src/community_document_uppercase_count_map.test.js`.
