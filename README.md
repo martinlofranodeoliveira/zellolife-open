@@ -2065,3 +2065,73 @@ Examples (JSON input and expected output):
 ```
 
 Public regression tests: `src/community_document_text_length_tier_map.test.js`.
+
+
+<!-- community-core:document-heading-trailing-punct-flag-map -->
+### Deterministic heading trailing punctuation flag map for local triage routing
+
+Lets local document tools spot headings that end with terminal or separator punctuation and route them for manual cleanup before rendering or export without copying full text. It reuses existing document validation so only well-formed inputs are flagged, reports per-section trailing-punctuation presence plus a corpus count for local coordination, and stays fully deterministic with no clinical inference, file access, network activity, account, or storage.
+
+Reusable deterministic JSON core: `src/community/document_heading_trailing_punct_flag_map.mjs`, API `runFeature(payload)`. This module is independently tested; application/UI integration is outside this change.
+
+Expose runFeature(payload) as a pure deterministic function. Input payload must be a plain object with locale and sections where locale is one of pt-br, en-us, es with case and surrounding whitespace normalized by trimming and lowercasing then compared with strict equality, and sections is an array of 1 to 100 objects with heading and text where heading is a string with non-empty trim and original length up to 200 UTF-16 units and text is a string with cumulative heading.length plus text.length up to 180000 UTF-16 units. Validation matches validateDocument and throws TypeError DOCUMENT_OBJECT_REQUIRED for non-object input, TypeError DOCUMENT_LOCALE_INVALID for bad locale, TypeError DOCUMENT_SECTIONS_INVALID for bad array, TypeError DOCUMENT_SECTION_INVALID for bad heading or text, and RangeError DOCUMENT_TOO_LARGE for overflow, without mutating input, checking in order object, locale, sections array shape, per-section heading/text plus overflow. On success iterate sections in order with for-of, building results with push and object literals and no indexed access. For each section define h as heading.trim() and find lastChar by iterating each for-of character of h and keeping the most recent value with strict equality without aliasing builtins or passing builtins as callbacks; define hasTrailingPunct as true when lastChar strictly equals one of U+002E FULL STOP (.), U+003F QUESTION MARK (?), U+0021 EXCLAMATION MARK (!), U+003A COLON (:), U+003B SEMICOLON (;), U+002C COMMA (,) and false otherwise. Produce entry with index as zero-based integer and hasTrailingPunct as boolean. Compute trailingPunctSectionCount as number of entries where hasTrailingPunct is true. Return an object with locale, entries and trailingPunctSectionCount where locale is normalized, entries has one entry per section in order, and count equals sum. Implementation is a pure ES module exporting function runFeature(payload) with no imports, classes, async, this, reflection or mutable module variables and preserves input, using only for-of and Object.entries and Object.values without computed non-literal access, without aliasing builtins, without passing builtins as callbacks, without reassignment of function or builtin identifiers, without property assignment/update/delete and without Object.assign or Object.create and without prototype or constructor access, building objects with object literals or Object.fromEntries and arrays with push and maps with set. No HTML escaping, rendering, sanitization, I/O, network, time, randomness, inference, or clinical decision is performed. Output contains only locale and trailing-punctuation flags and count, never headings, full text, unknown fields, or identifiers. This remains a reusable local core, not the full SaaS.
+
+Examples (JSON input and expected output):
+
+```json
+{
+  "input": {
+    "locale": "pt-br",
+    "sections": [
+      {
+        "heading": "Introducao.",
+        "text": "Texto simples."
+      },
+      {
+        "heading": "Notas",
+        "text": "Mais texto"
+      }
+    ]
+  },
+  "output": {
+    "entries": [
+      {
+        "hasTrailingPunct": true,
+        "index": 0
+      },
+      {
+        "hasTrailingPunct": false,
+        "index": 1
+      }
+    ],
+    "locale": "pt-br",
+    "trailingPunctSectionCount": 1
+  }
+}
+```
+
+```json
+{
+  "input": {
+    "locale": " EN-US ",
+    "sections": [
+      {
+        "heading": "  Review:  ",
+        "text": "Hi"
+      }
+    ]
+  },
+  "output": {
+    "entries": [
+      {
+        "hasTrailingPunct": true,
+        "index": 0
+      }
+    ],
+    "locale": "en-us",
+    "trailingPunctSectionCount": 1
+  }
+}
+```
+
+Public regression tests: `src/community_document_heading_trailing_punct_flag_map.test.js`.
