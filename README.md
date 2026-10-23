@@ -2237,3 +2237,75 @@ Examples (JSON input and expected output):
 ```
 
 Public regression tests: `src/community_document_heading_word_count_map.test.js`.
+
+
+<!-- community-core:document-section-load-map -->
+### Deterministic section load map for local workload triage
+
+Lets local document tools measure per-section combined character load for workload budgeting and manual triage routing without rendering HTML or copying section text. It reuses existing document validation so only well-formed inputs are measured, reports per-section loads plus total and heaviest index for local coordination, and stays fully deterministic with no clinical inference, file access, network activity, account, or storage.
+
+Reusable deterministic JSON core: `src/community/document_section_load_map.mjs`, API `runFeature(payload)`. This module is independently tested; application/UI integration is outside this change.
+
+Expose runFeature(payload) as a pure deterministic function. Input payload must be a plain object with locale and sections where locale is one of pt-br, en-us, es with case and surrounding whitespace normalized by trimming and lowercasing then compared with strict equality, and sections is an array of 1 to 100 objects with heading and text where heading is a string with non-empty trim and original length up to 200 UTF-16 units and text is a string with cumulative heading.length plus text.length up to 180000 UTF-16 units. Validation matches validateDocument and throws TypeError DOCUMENT_OBJECT_REQUIRED for non-object input, TypeError DOCUMENT_LOCALE_INVALID for bad locale, TypeError DOCUMENT_SECTIONS_INVALID for bad array, TypeError DOCUMENT_SECTION_INVALID for bad heading or text, and RangeError DOCUMENT_TOO_LARGE for overflow, without mutating input, checking in order object, locale, sections array shape, per-section heading/text plus overflow. On success iterate sections in order with for-of, building results with push and object literals and no indexed access. For each section define h as heading.trim() and sectionLoad as h.length plus text.length in UTF-16 units, produce entry with index as zero-based integer and sectionLoad as integer. Compute totalLoad as sum of sectionLoad over entries and heaviestIndex as smallest index with maximal sectionLoad. Return an object with locale, entries, totalLoad and heaviestIndex where locale is normalized, entries has one entry per section in order, total equals sum and heaviest is first maximum. Implementation is a pure ES module exporting function runFeature(payload) with no imports, classes, async, this, reflection or mutable module variables and preserves input, using only for-of and Object.entries and Object.values without computed non-literal access, without aliasing builtins, without passing builtins as callbacks, without reassignment of function or builtin identifiers, without property assignment/update/delete and without Object.assign or Object.create and without prototype or constructor access, building objects with object literals or Object.fromEntries and arrays with push and maps with set. No HTML escaping, rendering, sanitization, I/O, network, time, randomness, inference, or clinical decision is performed. Output contains only locale and load numbers and indices, never headings, full text, unknown fields, or identifiers. This remains a reusable local core, not the full SaaS.
+
+Examples (JSON input and expected output):
+
+```json
+{
+  "input": {
+    "locale": "pt-br",
+    "sections": [
+      {
+        "heading": "  Exemplo  ",
+        "text": "Texto."
+      },
+      {
+        "heading": "Notas",
+        "text": "Mais texto"
+      }
+    ]
+  },
+  "output": {
+    "entries": [
+      {
+        "index": 0,
+        "sectionLoad": 13
+      },
+      {
+        "index": 1,
+        "sectionLoad": 15
+      }
+    ],
+    "heaviestIndex": 1,
+    "locale": "pt-br",
+    "totalLoad": 28
+  }
+}
+```
+
+```json
+{
+  "input": {
+    "locale": " EN-US ",
+    "sections": [
+      {
+        "heading": "Intro",
+        "text": "Hi"
+      }
+    ]
+  },
+  "output": {
+    "entries": [
+      {
+        "index": 0,
+        "sectionLoad": 7
+      }
+    ],
+    "heaviestIndex": 0,
+    "locale": "en-us",
+    "totalLoad": 7
+  }
+}
+```
+
+Public regression tests: `src/community_document_section_load_map.test.js`.
