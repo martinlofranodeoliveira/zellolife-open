@@ -1984,3 +1984,84 @@ Examples (JSON input and expected output):
 ```
 
 Public regression tests: `src/community_document_uppercase_count_map.test.js`.
+
+
+<!-- community-core:document-text-length-tier-map -->
+### Deterministic text length tier map for local review triage
+
+Lets local document tools bucket sections by plain-text length into short, medium and large tiers for review triage and workload routing without rendering HTML or copying full text. It reuses existing document validation so only well-formed inputs are measured, reports per-section lengths with tier labels plus corpus tier counts for local coordination, and stays fully deterministic with no clinical inference, file access, network activity, account, or storage.
+
+Reusable deterministic JSON core: `src/community/document_text_length_tier_map.mjs`, API `runFeature(payload)`. This module is independently tested; application/UI integration is outside this change.
+
+Expose runFeature(payload) as a pure deterministic function. Input payload must be a plain object with locale and sections where locale is one of pt-br, en-us, es with case and surrounding whitespace normalized by trimming and lowercasing then compared with strict equality, and sections is an array of 1 to 100 objects with heading and text where heading is a string with non-empty trim and original length up to 200 UTF-16 units and text is a string with cumulative heading.length plus text.length up to 180000 UTF-16 units. Validation matches validateDocument and throws TypeError DOCUMENT_OBJECT_REQUIRED for non-object input, TypeError DOCUMENT_LOCALE_INVALID for bad locale, TypeError DOCUMENT_SECTIONS_INVALID for bad array, TypeError DOCUMENT_SECTION_INVALID for bad heading or text, and RangeError DOCUMENT_TOO_LARGE for overflow, without mutating input, checking in order object, locale, sections array shape, per-section heading/text plus overflow. On success iterate sections in order with for-of maintaining a zero-based counter, building entries with push and object literals and no indexed access. For each section define textLength as text.length in UTF-16 units and tier as short when textLength is less than 500, medium when less than 2000, large otherwise, using strict comparisons without aliasing builtins or passing builtins as callbacks. Produce entry with index as zero-based integer, textLength as integer and tier as string. Compute tierCounts as object literal with short, medium and large each equal to number of entries with that tier. Return an object with locale, entries and tierCounts where locale is normalized, entries has one entry per section in order, and tierCounts equals sums. Implementation is a pure ES module exporting function runFeature(payload) with no imports, classes, async, this, reflection or mutable module variables and preserves input, using only for-of and Object.entries and Object.values without computed non-literal access, without aliasing builtins, without passing builtins as callbacks, without reassignment of function or builtin identifiers, without property assignment/update/delete and without Object.assign or Object.create and without prototype or constructor access, building objects with object literals or Object.fromEntries and arrays with push and maps with set. No HTML escaping, rendering, sanitization, I/O, network, time, randomness, inference, or clinical decision is performed. Output contains only locale, lengths and tiers, never headings, full text, unknown fields, or identifiers. This remains a reusable local core, not the full SaaS.
+
+Examples (JSON input and expected output):
+
+```json
+{
+  "input": {
+    "locale": "pt-br",
+    "sections": [
+      {
+        "heading": "  Exemplo  ",
+        "text": "Texto."
+      },
+      {
+        "heading": "Notas",
+        "text": "Mais texto"
+      }
+    ]
+  },
+  "output": {
+    "entries": [
+      {
+        "index": 0,
+        "textLength": 6,
+        "tier": "short"
+      },
+      {
+        "index": 1,
+        "textLength": 10,
+        "tier": "short"
+      }
+    ],
+    "locale": "pt-br",
+    "tierCounts": {
+      "large": 0,
+      "medium": 0,
+      "short": 2
+    }
+  }
+}
+```
+
+```json
+{
+  "input": {
+    "locale": " EN-US ",
+    "sections": [
+      {
+        "heading": "Intro",
+        "text": "Hi"
+      }
+    ]
+  },
+  "output": {
+    "entries": [
+      {
+        "index": 0,
+        "textLength": 2,
+        "tier": "short"
+      }
+    ],
+    "locale": "en-us",
+    "tierCounts": {
+      "large": 0,
+      "medium": 0,
+      "short": 1
+    }
+  }
+}
+```
+
+Public regression tests: `src/community_document_text_length_tier_map.test.js`.
