@@ -1834,3 +1834,78 @@ Examples (JSON input and expected output):
 ```
 
 Public regression tests: `src/community_document_text_edge_whitespace_flag_map.test.js`.
+
+
+<!-- community-core:document-text-duplicate-map -->
+### Deterministic text duplicate map for local copy review
+
+Lets local document tools spot identical section bodies that signal copy-paste reuse, template repetition, or placeholder duplication for manual structure and completeness review without rendering HTML or copying full text into new stores. It reuses existing document validation so only well-formed inputs are measured, reports per-section duplicate flags with group counts plus corpus totals for local iteration planning, and stays fully deterministic with no clinical inference, file access, network activity, account, or storage.
+
+Reusable deterministic JSON core: `src/community/document_text_duplicate_map.mjs`, API `runFeature(payload)`. This module is independently tested; application/UI integration is outside this change.
+
+Expose runFeature(payload) as a pure deterministic function. Input payload must be a plain object with locale and sections where locale is one of pt-br, en-us, es with case and surrounding whitespace normalized by trimming and lowercasing then compared with strict equality, and sections is an array of 1 to 100 objects with heading and text where heading is a string with non-empty trim and original length up to 200 UTF-16 units and text is a string with cumulative heading.length plus text.length up to 180000 UTF-16 units. Validation matches validateDocument and throws TypeError DOCUMENT_OBJECT_REQUIRED for non-object input, TypeError DOCUMENT_LOCALE_INVALID for bad locale, TypeError DOCUMENT_SECTIONS_INVALID for bad array, TypeError DOCUMENT_SECTION_INVALID for bad heading or text, and RangeError DOCUMENT_TOO_LARGE for overflow, without mutating input. On success iterate sections in order with for-of, building results with push and object literals and no indexed access. For each section define t as text exact with no trimming or case folding, and count exact matches by using a Map with get and set to tally occurrences across all sections with strict equality without aliasing builtins or passing builtins as callbacks; define duplicateCount as that total and isDuplicate as duplicateCount greater than one. Produce entry with index as zero-based integer, duplicateCount as integer and isDuplicate as boolean. Compute duplicateSectionCount as number of entries where isDuplicate is true and duplicateGroupCount as number of distinct texts where duplicateCount is greater than one. Return an object with locale, entries, duplicateSectionCount and duplicateGroupCount where locale is normalized, entries has one entry per section in order, and totals equal sums. Implementation is a pure ES module exporting function runFeature(payload) with no imports, classes, async, this, reflection or mutable module variables and preserves input, using only for-of and Object.entries and Object.values without computed non-literal access, without aliasing builtins, without passing builtins as callbacks, without reassignment of function or builtin identifiers, without property assignment/update/delete and without Object.assign or Object.create and without prototype or constructor access, building objects with object literals or Object.fromEntries and arrays with push and maps with set. No HTML escaping, rendering, sanitization, I/O, network, inference, or clinical decision is performed. Output contains only locale and duplicate counts and flags, never headings, full text, unknown fields, or identifiers. This remains a reusable local core, not the full SaaS.
+
+Examples (JSON input and expected output):
+
+```json
+{
+  "input": {
+    "locale": "pt-br",
+    "sections": [
+      {
+        "heading": "Intro",
+        "text": "Same"
+      },
+      {
+        "heading": "Next",
+        "text": "Same"
+      }
+    ]
+  },
+  "output": {
+    "duplicateGroupCount": 1,
+    "duplicateSectionCount": 2,
+    "entries": [
+      {
+        "duplicateCount": 2,
+        "index": 0,
+        "isDuplicate": true
+      },
+      {
+        "duplicateCount": 2,
+        "index": 1,
+        "isDuplicate": true
+      }
+    ],
+    "locale": "pt-br"
+  }
+}
+```
+
+```json
+{
+  "input": {
+    "locale": " EN-US ",
+    "sections": [
+      {
+        "heading": "Intro",
+        "text": "Hi"
+      }
+    ]
+  },
+  "output": {
+    "duplicateGroupCount": 0,
+    "duplicateSectionCount": 0,
+    "entries": [
+      {
+        "duplicateCount": 1,
+        "index": 0,
+        "isDuplicate": false
+      }
+    ],
+    "locale": "en-us"
+  }
+}
+```
+
+Public regression tests: `src/community_document_text_duplicate_map.test.js`.
