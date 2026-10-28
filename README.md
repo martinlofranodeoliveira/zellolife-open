@@ -2309,3 +2309,64 @@ Examples (JSON input and expected output):
 ```
 
 Public regression tests: `src/community_document_section_load_map.test.js`.
+
+
+<!-- community-core:document-chunk-plan-map -->
+### Deterministic plain-text chunk plan map for local budgeting
+
+Lets local document tools budget fixed-size iteration over synthetic plain-text exports without materializing chunk strings or rendering HTML. It reuses existing document validation and surrogate-aware greedy slicing so plans match chunkPlainTextDocument, reporting only resolved size, total length, count and per-chunk lengths for local navigation and memory budgeting. The operation stays deterministic with no clinical inference, file access, network activity, account, or storage.
+
+Reusable deterministic JSON core: `src/community/document_chunk_plan_map.mjs`, API `runFeature(payload)`. This module is independently tested; application/UI integration is outside this change.
+
+Expose runFeature(payload) as a pure deterministic function. Input payload must be a plain object with locale and sections and optional maxCharacters where locale is one of pt-br, en-us, es with case and surrounding whitespace normalized by trimming and lowercasing then compared with strict equality, and sections is an array of 1 to 100 objects with heading and text where heading is a string with non-empty trim and original length up to 200 UTF-16 units and text is a string with cumulative heading.length plus text.length up to 180000 UTF-16 units, and maxCharacters follows chunkPlainTextDocument rules. Validation matches validateDocument with chunk-size precedence and throws TypeError DOCUMENT_OBJECT_REQUIRED for non-object input, RangeError DOCUMENT_CHUNK_SIZE_INVALID for invalid maxCharacters, TypeError DOCUMENT_LOCALE_INVALID for bad locale, TypeError DOCUMENT_SECTIONS_INVALID for bad array, TypeError DOCUMENT_SECTION_INVALID for bad heading or text, and RangeError DOCUMENT_TOO_LARGE for overflow, without mutating input, checking in order object, maxCharacters, locale, sections array shape, per-section heading and text plus overflow. maxCharacters omitted or undefined uses 4000; after default only a primitive number that is an integer with 256 <= value <= 16384 is accepted, any other type or value throws RangeError DOCUMENT_CHUNK_SIZE_INVALID without coercion and before document validation. On success normalize locale by trimming and lowercasing and build plain text exactly as renderPlainTextDocument with trimmed heading plus LF plus original text per section joined by double LF, then partition greedily with for-of over characters accumulating String.length units starting a new chunk when the next character would exceed maxCharacters, never producing an empty chunk and never splitting a high-surrogate D800-DBFF plus low-surrogate DC00-DFFF pair while preserving isolated surrogates with no normalization and no word or paragraph preservation. Return an object with locale, maxCharacters, totalLength, chunkCount and chunkLengths where locale is normalized, maxCharacters is resolved, totalLength is plain-text String.length, chunkCount equals chunkLengths length, and chunkLengths holds one positive integer per chunk in order each 1 to maxCharacters summing to totalLength and matching slicing of the plain text. Implementation is a pure ES module exporting function runFeature(payload) with no imports, classes, async, this, reflection or mutable module variables and preserves input, using only for-of and Object.entries and Object.values and Map get and set without computed non-literal access except literal nonnegative numeric indices, without aliasing builtins, without passing builtins as callbacks, without reassignment of function or builtin identifiers, without property assignment or update or delete and without Object.assign or Object.create and without prototype or constructor access, building objects with object literals or Object.fromEntries and arrays with push and maps with set. No HTML escaping, rendering, sanitization, I/O, network, time, randomness, inference, or clinical decision is performed. Output contains only locale, size, lengths and count, never headings, full text, unknown fields, or identifiers. This remains a reusable local core, not the full SaaS.
+
+Examples (JSON input and expected output):
+
+```json
+{
+  "input": {
+    "locale": "pt-br",
+    "sections": [
+      {
+        "heading": "  Exemplo  ",
+        "text": "Texto."
+      }
+    ]
+  },
+  "output": {
+    "chunkCount": 1,
+    "chunkLengths": [
+      14
+    ],
+    "locale": "pt-br",
+    "maxCharacters": 4000,
+    "totalLength": 14
+  }
+}
+```
+
+```json
+{
+  "input": {
+    "locale": " EN-US ",
+    "maxCharacters": 256,
+    "sections": [
+      {
+        "heading": "Intro",
+        "text": "Hi"
+      }
+    ]
+  },
+  "output": {
+    "chunkCount": 1,
+    "chunkLengths": [
+      8
+    ],
+    "locale": "en-us",
+    "maxCharacters": 256,
+    "totalLength": 8
+  }
+}
+```
+
+Public regression tests: `src/community_document_chunk_plan_map.test.js`.
