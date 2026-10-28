@@ -2509,3 +2509,78 @@ Examples (JSON input and expected output):
 ```
 
 Public regression tests: `src/community_document_section_batch_map.test.js`.
+
+
+<!-- community-core:document-longest-line-map -->
+### Deterministic longest-line map for local layout budgeting
+
+Lets local document tools budget fixed-width layout and wrapping work without rendering HTML or copying full text. It reuses existing document validation so only well-formed inputs are measured, reports per-section longest visual line and line counts for local pagination and review triage, and stays fully deterministic with no clinical inference, file access, network activity, account, or storage. This remains a reusable local core, not the full SaaS.
+
+Reusable deterministic JSON core: `src/community/document_longest_line_map.mjs`, API `runFeature(payload)`. This module is independently tested; application/UI integration is outside this change.
+
+Expose runFeature(payload) as a pure deterministic function. Input payload must be a plain object with locale and sections where locale is one of pt-br, en-us, es with case and surrounding whitespace normalized by trimming and lowercasing then compared with strict equality, and sections is an array of 1 to 100 objects with heading and text where heading is a string with non-empty trim and original length up to 200 UTF-16 units and text is a string with cumulative heading.length plus text.length up to 180000 UTF-16 units. Validation matches validateDocument and throws TypeError DOCUMENT_OBJECT_REQUIRED for non-object input including null and arrays, TypeError DOCUMENT_LOCALE_INVALID for bad locale, TypeError DOCUMENT_SECTIONS_INVALID for bad array, TypeError DOCUMENT_SECTION_INVALID for bad heading or text, RangeError DOCUMENT_TOO_LARGE for overflow, without mutating input, checking in order object, locale, sections array shape, per-section heading and text plus overflow. On success normalize locale by trimming and lowercasing, and for each section in order let trimmedHeading equal heading.trim() and let block equal trimmedHeading plus LF plus text, split block on LF U+000A to obtain raw lines, and for measurement strip a single trailing CR U+000D from each raw line when present so CRLF counts as one break and CR does not add width, matching renderDocument carriage handling. Define lineCount as number of raw lines and longestLine as maximum effective String.length over all lines, minimum lineCount 2. Return an object with locale, sectionCount, longestOverall and lines where locale is normalized, sectionCount equals sections length, lines has one entry per section in order each with index as zero-based integer, longestLine as integer and lineCount as integer, and longestOverall equals maximum longestLine. Implementation is a pure ES module exporting function runFeature(payload) with no imports, classes, async, this, reflection or mutable module variables and preserves input, using only for-of and Object.entries and Object.values and Map get and set without computed non-literal access except literal nonnegative numeric indices, without aliasing builtins, without passing builtins as callbacks, without reassignment of function or builtin identifiers, without property assignment or update or delete and without Object.assign or Object.create and without prototype or constructor access, building objects with object literals or Object.fromEntries and arrays with push and maps with set. No HTML escaping, rendering, sanitization, I/O, network, time, randomness, inference, or clinical decision is performed. Output contains only normalized locale, counts and integer widths, never headings, full text, unknown fields, or identifiers. This remains a reusable local core, not the full SaaS.
+
+Examples (JSON input and expected output):
+
+```json
+{
+  "input": {
+    "locale": "pt-br",
+    "sections": [
+      {
+        "heading": "  Exemplo  ",
+        "text": "Texto."
+      },
+      {
+        "heading": "Notas",
+        "text": "Mais texto"
+      }
+    ]
+  },
+  "output": {
+    "lines": [
+      {
+        "index": 0,
+        "lineCount": 2,
+        "longestLine": 7
+      },
+      {
+        "index": 1,
+        "lineCount": 2,
+        "longestLine": 10
+      }
+    ],
+    "locale": "pt-br",
+    "longestOverall": 10,
+    "sectionCount": 2
+  }
+}
+```
+
+```json
+{
+  "input": {
+    "locale": " EN-US ",
+    "sections": [
+      {
+        "heading": "Intro",
+        "text": "Hi\r\nHello"
+      }
+    ]
+  },
+  "output": {
+    "lines": [
+      {
+        "index": 0,
+        "lineCount": 3,
+        "longestLine": 5
+      }
+    ],
+    "locale": "en-us",
+    "longestOverall": 5,
+    "sectionCount": 1
+  }
+}
+```
+
+Public regression tests: `src/community_document_longest_line_map.test.js`.
