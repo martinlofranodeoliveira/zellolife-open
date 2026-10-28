@@ -2656,3 +2656,107 @@ Examples (JSON input and expected output):
 ```
 
 Public regression tests: `src/community_document_paragraph_block_count_map.test.js`.
+
+
+<!-- community-core:document-heading-slug-map -->
+### Deterministic heading slug map for local anchor navigation
+
+Lets local document tools organize section demands and route work to the responsible handler via stable URL-safe anchors without rendering HTML, copying full text, or using network, files, or accounts. It reuses existing document validation so only well-formed inputs are slugged, preserves trimmed headings exactly, and guarantees unique deterministic anchors for table-of-contents linking and local coordination. This remains a reusable local core, not the full SaaS.
+
+Reusable deterministic JSON core: `src/community/document_heading_slug_map.mjs`, API `runFeature(payload)`. This module is independently tested; application/UI integration is outside this change.
+
+Expose runFeature(payload) as a pure deterministic function. Input payload must be a plain object with locale and sections where locale is one of pt-br, en-us, es with case and surrounding whitespace normalized by trimming and lowercasing then compared with strict equality, and sections is an array of 1 to 100 objects with heading and text where heading is a string with non-empty trim and original length up to 200 UTF-16 units and text is a string with cumulative heading.length plus text.length up to 180000 UTF-16 units. Validation matches validateDocument and throws TypeError DOCUMENT_OBJECT_REQUIRED for non-object input including null and arrays, TypeError DOCUMENT_LOCALE_INVALID for bad locale, TypeError DOCUMENT_SECTIONS_INVALID for bad array, TypeError DOCUMENT_SECTION_INVALID for bad heading or text, and RangeError DOCUMENT_TOO_LARGE for overflow, without mutating input, checking in order object, locale, sections array shape, per-section heading and text plus overflow. On success normalize locale by trimming and lowercasing. For each section in order take heading.trim() as heading and derive base slug by lowercasing then for-of scan: keep a-z and 0-9, map space underscore and hyphen to hyphen, drop all other code points, collapse consecutive hyphens to one, trim leading and trailing hyphens, if empty use section, truncate to first 60 characters and re-trim trailing hyphen. Ensure uniqueness with Map get/set: first use of base keeps base, later duplicates append -1, -2 incrementing until unused, guaranteeing stable deterministic anchors. Return an object with locale and slugs where locale is normalized and slugs has one entry per section in order each with index as zero-based integer, heading as trimmed string and slug as unique anchor string. Implementation is a pure ES module exporting function runFeature(payload) with no imports, classes, async, this, reflection or mutable module variables and preserves input, using only for-of and Object.entries and Object.values and Map get and set without computed non-literal access except literal nonnegative numeric indices, without aliasing builtins, without passing builtins as callbacks, without reassignment of function or builtin identifiers, without property assignment or update or delete and without Object.assign or Object.create and without prototype or constructor access, building objects with object literals or Object.fromEntries and arrays with push and maps with set. No HTML escaping, rendering, sanitization, I/O, network, time, randomness, inference or clinical decision is performed. Output contains only normalized locale plus index-heading-slug triples, never full text, unknown fields or identifiers. This remains a reusable local core, not the full SaaS.
+
+Examples (JSON input and expected output):
+
+```json
+{
+  "input": {
+    "locale": "pt-br",
+    "sections": [
+      {
+        "heading": "  Exemplo  ",
+        "text": "Texto."
+      },
+      {
+        "heading": "Notas",
+        "text": "Mais texto"
+      }
+    ]
+  },
+  "output": {
+    "locale": "pt-br",
+    "slugs": [
+      {
+        "heading": "Exemplo",
+        "index": 0,
+        "slug": "exemplo"
+      },
+      {
+        "heading": "Notas",
+        "index": 1,
+        "slug": "notas"
+      }
+    ]
+  }
+}
+```
+
+```json
+{
+  "input": {
+    "locale": " EN-US ",
+    "sections": [
+      {
+        "heading": "Intro!",
+        "text": "Hi"
+      },
+      {
+        "heading": "Intro",
+        "text": "Hey"
+      }
+    ]
+  },
+  "output": {
+    "locale": "en-us",
+    "slugs": [
+      {
+        "heading": "Intro!",
+        "index": 0,
+        "slug": "intro"
+      },
+      {
+        "heading": "Intro",
+        "index": 1,
+        "slug": "intro-1"
+      }
+    ]
+  }
+}
+```
+
+```json
+{
+  "input": {
+    "locale": "es",
+    "sections": [
+      {
+        "heading": "!!!",
+        "text": "Hola"
+      }
+    ]
+  },
+  "output": {
+    "locale": "es",
+    "slugs": [
+      {
+        "heading": "!!!",
+        "index": 0,
+        "slug": "section"
+      }
+    ]
+  }
+}
+```
+
+Public regression tests: `src/community_document_heading_slug_map.test.js`.
