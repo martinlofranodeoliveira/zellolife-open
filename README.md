@@ -2370,3 +2370,65 @@ Examples (JSON input and expected output):
 ```
 
 Public regression tests: `src/community_document_chunk_plan_map.test.js`.
+
+
+<!-- community-core:document-plaintext-budget-split -->
+### Deterministic plain-text budget split for local layout
+
+Lets local document tools budget plain-text exports without rendering HTML or copying full section text. It reuses existing document validation so only well-formed inputs are measured, splits totals into heading, body and separator budgets that sum to the exact plain-text length for local storage and layout planning, and stays fully deterministic with no clinical inference, file access, network activity, account or storage. This remains a reusable local core, not the full SaaS.
+
+Reusable deterministic JSON core: `src/community/document_plaintext_budget_split.mjs`, API `runFeature(payload)`. This module is independently tested; application/UI integration is outside this change.
+
+Expose runFeature(payload) as a pure deterministic function. Input payload must be a plain object with locale and sections where locale is one of pt-br, en-us, es with case and surrounding whitespace normalized by trimming and lowercasing then compared with strict equality, and sections is an array of 1 to 100 objects with heading and text where heading is a string with non-empty trim and original length up to 200 UTF-16 units and text is a string with cumulative heading.length plus text.length up to 180000 UTF-16 units. Validation matches validateDocument and throws TypeError DOCUMENT_OBJECT_REQUIRED for non-object input including null and arrays, TypeError DOCUMENT_LOCALE_INVALID for bad locale, TypeError DOCUMENT_SECTIONS_INVALID for bad array, TypeError DOCUMENT_SECTION_INVALID for bad heading or text, and RangeError DOCUMENT_TOO_LARGE for overflow, without mutating input, checking in order object, locale, sections array shape, per-section heading and text plus overflow. On success normalize locale by trimming and lowercasing, compute headingTotal as sum of trimmed heading String.length, textTotal as sum of text String.length, sectionCount as sections length, separatorTotal as 3*sectionCount-2 for single LF inside each section plus double LF between sections, and totalLength as headingTotal plus textTotal plus separatorTotal matching renderPlainTextDocument length with trimmed heading plus LF plus original text per section joined by double LF. Return an object with locale, sectionCount, headingTotal, textTotal, separatorTotal and totalLength where all counts are safe integers. Implementation is a pure ES module exporting function runFeature(payload) with no imports, classes, async, this, reflection or mutable module variables and preserves input, using only for-of and Object.entries and Object.values and Map get and set without computed non-literal access except literal nonnegative numeric indices, without aliasing builtins, without passing builtins as callbacks, without reassignment of function or builtin identifiers, without property assignment or update or delete and without Object.assign or Object.create and without prototype or constructor access, building objects with object literals or Object.fromEntries and arrays with push and maps with set. No HTML escaping, rendering, sanitization, I/O, network, time, randomness, inference, or clinical decision is performed. Output contains only normalized locale and integer budgets, never headings, full text, unknown fields, or identifiers. This remains a reusable local core, not the full SaaS.
+
+Examples (JSON input and expected output):
+
+```json
+{
+  "input": {
+    "locale": "pt-br",
+    "sections": [
+      {
+        "heading": "  Exemplo  ",
+        "text": "Texto."
+      },
+      {
+        "heading": "Notas",
+        "text": "Mais texto"
+      }
+    ]
+  },
+  "output": {
+    "headingTotal": 12,
+    "locale": "pt-br",
+    "sectionCount": 2,
+    "separatorTotal": 4,
+    "textTotal": 16,
+    "totalLength": 32
+  }
+}
+```
+
+```json
+{
+  "input": {
+    "locale": " EN-US ",
+    "sections": [
+      {
+        "heading": "Intro",
+        "text": "Hi"
+      }
+    ]
+  },
+  "output": {
+    "headingTotal": 5,
+    "locale": "en-us",
+    "sectionCount": 1,
+    "separatorTotal": 1,
+    "textTotal": 2,
+    "totalLength": 8
+  }
+}
+```
+
+Public regression tests: `src/community_document_plaintext_budget_split.test.js`.
