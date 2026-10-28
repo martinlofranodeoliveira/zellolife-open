@@ -2584,3 +2584,75 @@ Examples (JSON input and expected output):
 ```
 
 Public regression tests: `src/community_document_longest_line_map.test.js`.
+
+
+<!-- community-core:document-paragraph-block-count-map -->
+### Deterministic paragraph block count map for local layout triage
+
+Lets local document tools estimate blank-line paragraph blocks for pagination and layout budgeting without rendering HTML, copying full text, or using network, files, or accounts. It reuses existing document validation so only well-formed inputs are measured, reports per-section and total block counts that distinguish single line breaks from true paragraph separators, and stays fully deterministic with no clinical inference, storage, or decision. This remains a reusable local core, not the full SaaS.
+
+Reusable deterministic JSON core: `src/community/document_paragraph_block_count_map.mjs`, API `runFeature(payload)`. This module is independently tested; application/UI integration is outside this change.
+
+Expose runFeature(payload) as a pure deterministic function. Input payload must be a plain object with locale and sections where locale is one of pt-br, en-us, es with case and surrounding whitespace normalized by trimming and lowercasing then compared with strict equality, and sections is an array of 1 to 100 objects with heading and text where heading is a string with non-empty trim and original length up to 200 UTF-16 units and text is a string with cumulative heading.length plus text.length up to 180000 UTF-16 units. Validation matches validateDocument and throws TypeError DOCUMENT_OBJECT_REQUIRED for non-object input including null and arrays, TypeError DOCUMENT_LOCALE_INVALID for bad locale, TypeError DOCUMENT_SECTIONS_INVALID for bad array, TypeError DOCUMENT_SECTION_INVALID for bad heading or text, and RangeError DOCUMENT_TOO_LARGE for overflow, without mutating input, checking in order object, locale, sections array shape, per-section heading and text plus overflow. On success normalize locale by trimming and lowercasing. For each section in order compute blockCount by LF-only paragraph grouping: split text conceptually on U+000A LF where a line is blank only when zero-length, U+000D CR, spaces and tabs count as content with no CRLF normalization, consecutive non-empty lines form one block, consecutive blank lines coalesce to a single separator, leading and trailing blank lines create no block, empty text yields 0 and single LF inside content yields 1, implemented by for-of scan tracking inBlock and line content without building lines array. Define totalBlockCount as sum of blockCount and sectionCount as sections length. Return an object with locale, sectionCount, totalBlockCount and sections where locale is normalized, sectionCount equals sections length, totalBlockCount is integer sum, and sections has one entry per section in order each with index as zero-based integer and blockCount as integer. Implementation is a pure ES module exporting function runFeature(payload) with no imports, classes, async, this, reflection or mutable module variables and preserves input, using only for-of and Object.entries and Object.values and Map get and set without computed non-literal access except literal nonnegative numeric indices, without aliasing builtins, without passing builtins as callbacks, without reassignment of function or builtin identifiers, without property assignment or update or delete and without Object.assign or Object.create and without prototype or constructor access, building objects with object literals or Object.fromEntries and arrays with push and maps with set. No HTML escaping, rendering, sanitization, I/O, network, time, randomness, inference, or clinical decision is performed. Output contains only normalized locale, counts and per-section block tallies, never headings, full text, unknown fields, or identifiers. Counts are paragraph blocks defined by blank LF lines, not bytes, tokens, words, lines or clinical findings. This remains a reusable local core, not the full SaaS.
+
+Examples (JSON input and expected output):
+
+```json
+{
+  "input": {
+    "locale": "pt-br",
+    "sections": [
+      {
+        "heading": "  Exemplo  ",
+        "text": "Para um.\n\nPara dois.\n\nPara tres."
+      }
+    ]
+  },
+  "output": {
+    "locale": "pt-br",
+    "sectionCount": 1,
+    "sections": [
+      {
+        "blockCount": 3,
+        "index": 0
+      }
+    ],
+    "totalBlockCount": 3
+  }
+}
+```
+
+```json
+{
+  "input": {
+    "locale": " EN-US ",
+    "sections": [
+      {
+        "heading": "Intro",
+        "text": "Hi\nthere"
+      },
+      {
+        "heading": "Notas",
+        "text": "\n\n"
+      }
+    ]
+  },
+  "output": {
+    "locale": "en-us",
+    "sectionCount": 2,
+    "sections": [
+      {
+        "blockCount": 1,
+        "index": 0
+      },
+      {
+        "blockCount": 0,
+        "index": 1
+      }
+    ],
+    "totalBlockCount": 1
+  }
+}
+```
+
+Public regression tests: `src/community_document_paragraph_block_count_map.test.js`.
