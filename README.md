@@ -2840,3 +2840,73 @@ Examples (JSON input and expected output):
 ```
 
 Public regression tests: `src/community_document_remaining_budget_map.test.js`.
+
+
+<!-- community-core:document-numbered-prefix-map -->
+### Deterministic numbered-prefix map for ordered editorial navigation
+
+Lets local synthetic document tools detect manually numbered headings before deriving an automatic outline index. It reuses existing document validation so only well-formed inputs are checked, reports a positional digits-plus-delimiter prefix per section without copying text, and helps validate ordered editorial prerequisites for content-calendar sequencing while staying deterministic with no network, files, or clinical inference. This remains a reusable local core, not the full SaaS and with no clinical decision.
+
+Reusable deterministic JSON core: `src/community/document_numbered_prefix_map.mjs`, API `runFeature(payload)`. This module is independently tested; application/UI integration is outside this change.
+
+Expose runFeature(payload) as a pure deterministic function. Input payload must be a plain object with locale and sections where locale is one of pt-br, en-us, es with case and surrounding whitespace normalized by trimming and lowercasing then compared with strict equality, and sections is an array of 1 to 100 objects with heading and text where heading is a string with non-empty trim and original length up to 200 UTF-16 units and text is a string with cumulative heading.length plus text.length up to 180000 UTF-16 units. Validation matches validateDocument and throws TypeError DOCUMENT_OBJECT_REQUIRED for non-object input including null and arrays, TypeError DOCUMENT_LOCALE_INVALID for bad locale, TypeError DOCUMENT_SECTIONS_INVALID for bad array, TypeError DOCUMENT_SECTION_INVALID for bad heading or text, and RangeError DOCUMENT_TOO_LARGE for overflow, without mutating input, checking in order object, locale, sections array shape, per-section heading and text plus overflow. On success normalize locale by trimming and lowercasing. For each section in order let h be heading.trim() with no other normalization, escaping, or line-ending conversion. Define digit set as exactly 0,1,2,3,4,5,6,7,8,9 and delimiter set as exactly period and closing parenthesis compared via Map get and set. Define hasNumberedPrefix by leading scan using for-of over h without indexing: iterate characters with pos counter starting at 0, digitCount starting at 0, and decided flag false; for each character call digit and delimiter Map get directly, if not yet decided then if digit then increment digitCount else if digitCount greater than zero and pos equals digitCount and delimiter then mark true else mark false and mark decided, then increment pos; if heading is all digits with no delimiter result stays false. Define totalNumbered as integer count of true. Return an object with locale, totalNumbered and sections where locale is normalized, totalNumbered is count, and sections has one entry per section in order each with index as zero-based integer and hasNumberedPrefix as boolean. Implementation is a pure ES module exporting function runFeature(payload) with no imports, classes, async, this, reflection or mutable module variables and preserves input, using only for-of and Object.entries and Object.values and Map get and set without computed non-literal access except literal nonnegative numeric indices, without aliasing builtins, without passing builtins as callbacks, without reassignment of function or builtin identifiers, without property assignment or update or delete and without Object.assign or Object.create and without prototype or constructor access, building objects with object literals or Object.fromEntries and arrays with push and maps with set. No HTML escaping, rendering, sanitization, I/O, network, time, randomness, inference, or clinical decision is performed. Output contains only normalized locale, numbered-prefix total and index-flag pairs in order, never headings, full text, unknown fields, or identifiers. This remains a reusable local core for synthetic editorial ordering checks, not the full SaaS. Application and UI integration are outside this change.
+
+Examples (JSON input and expected output):
+
+```json
+{
+  "input": {
+    "locale": "pt-br",
+    "sections": [
+      {
+        "heading": "1. Exemplo",
+        "text": "Texto."
+      },
+      {
+        "heading": "Notas",
+        "text": "Mais texto"
+      }
+    ]
+  },
+  "output": {
+    "locale": "pt-br",
+    "sections": [
+      {
+        "hasNumberedPrefix": true,
+        "index": 0
+      },
+      {
+        "hasNumberedPrefix": false,
+        "index": 1
+      }
+    ],
+    "totalNumbered": 1
+  }
+}
+```
+
+```json
+{
+  "input": {
+    "locale": " EN-US ",
+    "sections": [
+      {
+        "heading": "  12) Intro  ",
+        "text": "Hi"
+      }
+    ]
+  },
+  "output": {
+    "locale": "en-us",
+    "sections": [
+      {
+        "hasNumberedPrefix": true,
+        "index": 0
+      }
+    ],
+    "totalNumbered": 1
+  }
+}
+```
+
+Public regression tests: `src/community_document_numbered_prefix_map.test.js`.
