@@ -2910,3 +2910,73 @@ Examples (JSON input and expected output):
 ```
 
 Public regression tests: `src/community_document_numbered_prefix_map.test.js`.
+
+
+<!-- community-core:document-delivery-checksum-map -->
+### Deterministic delivery checksum map for local receipt tracing
+
+Lets local synthetic document tools trace plain-text deliveries without rendering HTML or copying full section text. It reuses existing document validation so only well-formed inputs receive receipts, reports per-section UTF-16 checksums plus a total for local integrity and reorder detection during iteration, and stays fully deterministic with no network, files, accounts, storage, inference, or clinical decision. This remains a reusable local core, not the full SaaS.
+
+Reusable deterministic JSON core: `src/community/document_delivery_checksum_map.mjs`, API `runFeature(payload)`. This module is independently tested; application/UI integration is outside this change.
+
+Expose runFeature(payload) as a pure deterministic function. Input payload must be a plain object with locale and sections where locale is one of pt-br, en-us, es with case and surrounding whitespace normalized by trimming and lowercasing then compared with strict equality via Map get and set, and sections is an array of 1 to 100 objects with heading and text where heading is a string with non-empty trim and original length up to 200 UTF-16 units and text is a string with cumulative heading.length plus text.length up to 180000 UTF-16 units. Validation matches validateDocument and throws TypeError DOCUMENT_OBJECT_REQUIRED for non-object input including null and arrays, TypeError DOCUMENT_LOCALE_INVALID for bad locale, TypeError DOCUMENT_SECTIONS_INVALID for bad array, TypeError DOCUMENT_SECTION_INVALID for bad heading or text, and RangeError DOCUMENT_TOO_LARGE for overflow, without mutating input, checking in order object, locale, sections array shape, per-section heading and text plus overflow. On success normalize locale by trimming and lowercasing. For each section in order let h be heading.trim() with no other normalization, escaping, or line-ending conversion and let t be text unchanged. For each section define unitSum as integer sum over every for-of chunk c first over h then over t of c.charCodeAt(0) plus, only when c.length equals 2, c.charCodeAt(1), where each length-2 chunk represents one astral code point encoded as high plus low surrogates and length-1 chunks including BMP characters contribute one unit. Define checksum as unitSum % 65536. Define totalChecksum as sum of all section checksum values % 65536. Return an object with locale, totalChecksum and sections where locale is normalized, totalChecksum is integer total, and sections has one entry per section in order each with index as zero-based integer and checksum as integer. Implementation is a pure ES module exporting function runFeature(payload) with no imports, classes, async, this, reflection or mutable module variables and preserves input, using only for-of and Object.entries and Object.values and Map get and set without computed non-literal access except literal nonnegative numeric indices, without aliasing builtins, without passing builtins as callbacks, without reassignment of function or builtin identifiers, without property assignment or update or delete and without Object.assign or Object.create and without prototype or constructor access, building objects with object literals or Object.fromEntries and arrays with push and maps with set. No HTML escaping, rendering, sanitization, I/O, network, time, randomness, inference, or clinical decision is performed. Output contains only normalized locale, checksum total and index-checksum pairs in order, never headings, full text, unknown fields, or identifiers. This remains a reusable local core for synthetic receipt tracing, not the full SaaS. Application and UI integration are outside this change.
+
+Examples (JSON input and expected output):
+
+```json
+{
+  "input": {
+    "locale": "pt-br",
+    "sections": [
+      {
+        "heading": "  Exemplo  ",
+        "text": "Texto."
+      },
+      {
+        "heading": "Notas",
+        "text": "Mais texto"
+      }
+    ]
+  },
+  "output": {
+    "locale": "pt-br",
+    "sections": [
+      {
+        "checksum": 1308,
+        "index": 0
+      },
+      {
+        "checksum": 1507,
+        "index": 1
+      }
+    ],
+    "totalChecksum": 2815
+  }
+}
+```
+
+```json
+{
+  "input": {
+    "locale": " EN-US ",
+    "sections": [
+      {
+        "heading": "Intro",
+        "text": "Hi"
+      }
+    ]
+  },
+  "output": {
+    "locale": "en-us",
+    "sections": [
+      {
+        "checksum": 701,
+        "index": 0
+      }
+    ],
+    "totalChecksum": 701
+  }
+}
+```
+
+Public regression tests: `src/community_document_delivery_checksum_map.test.js`.
