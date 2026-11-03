@@ -3050,3 +3050,97 @@ Examples (JSON input and expected output):
 ```
 
 Public regression tests: `src/community_document_heading_echo_flag_map.test.js`.
+
+
+<!-- community-core:document-astral-pair-count-map -->
+### Deterministic astral pair count map for surrogate-safe local slicing
+
+Lets local synthetic document tools budget surrogate-aware slicing without rendering HTML or copying full text. It reuses existing document validation so only well-formed inputs are measured, reports per-section astral pair counts plus a total that distinguishes UTF-16 validation units from code points for chunk-safe splitting, and stays deterministic with no network, files, accounts, inference, or clinical decision. This remains a reusable local core, not the full SaaS.
+
+Reusable deterministic JSON core: `src/community/document_astral_pair_count_map.mjs`, API `runFeature(payload)`. This module is independently tested; application/UI integration is outside this change.
+
+Expose runFeature(payload) as a pure deterministic function. Input payload must be a plain object with locale and sections where locale is one of pt-br, en-us, es with case and surrounding whitespace normalized by trimming and lowercasing then compared with strict equality via Map get, and sections is an array of 1 to 100 objects with heading and text where heading is a string with non-empty trim and original length up to 200 UTF-16 units and text is a string with cumulative heading.length plus text.length up to 180000 UTF-16 units. Validation matches validateDocument and throws TypeError DOCUMENT_OBJECT_REQUIRED for non-object input including null and arrays, TypeError DOCUMENT_LOCALE_INVALID for bad locale, TypeError DOCUMENT_SECTIONS_INVALID for bad array, TypeError DOCUMENT_SECTION_INVALID for bad heading or text, and RangeError DOCUMENT_TOO_LARGE for overflow, without mutating input, checking in order object, locale, sections array shape, per-section heading and text plus overflow. On success normalize locale by trimming and lowercasing. For each section in order let h be heading.trim() with no other normalization, escaping, or line-ending conversion and let t be text unchanged. Define astralPairs(s) by iterating s with for-of code-point chunks and counting chunks where chunk.length is 2 as one astral surrogate pair; BMP characters and length-1 chunks never count. Define astralPairCount per section as astralPairs(h) plus astralPairs(t). Define totalAstralPairs as integer sum of all section astralPairCount values. Return an object with locale, totalAstralPairs and sections where locale is normalized, totalAstralPairs is total, and sections has one entry per section in order each with index as zero-based integer and astralPairCount as integer. Implementation is a pure ES module exporting function runFeature(payload) with no imports, classes, async, this, reflection or mutable module variables and preserves input, using only for-of and Object.entries and Object.values and Map get and set without computed non-literal access except literal nonnegative numeric indices, without aliasing builtins, without passing builtins as callbacks, without reassignment of function or builtin identifiers, without property assignment or update or delete and without Object.assign or Object.create and without prototype or constructor access, building objects with object literals or Object.fromEntries and arrays with push and maps with set. No HTML escaping, rendering, sanitization, I/O, network, time, randomness, inference, or clinical decision is performed. Output contains only normalized locale, pair total and index-count pairs in order, never headings, full text, unknown fields, or identifiers. Pair counts measure surrogate-aware chunk-split risk for local synthetic editing where chunkPlainTextDocument backs off one unit to avoid splitting D800..DBFF plus DC00..DFFF pairs, distinct from UTF-16 validation units, bytes, tokens, words, lines, HTML structure, anonymization, or clinical findings. This remains a reusable local core, not the full SaaS. Application and UI integration are outside this change.
+
+Examples (JSON input and expected output):
+
+```json
+{
+  "input": {
+    "locale": "pt-br",
+    "sections": [
+      {
+        "heading": "  Exemplo  ",
+        "text": "Texto."
+      }
+    ]
+  },
+  "output": {
+    "locale": "pt-br",
+    "sections": [
+      {
+        "astralPairCount": 0,
+        "index": 0
+      }
+    ],
+    "totalAstralPairs": 0
+  }
+}
+```
+
+```json
+{
+  "input": {
+    "locale": " EN-US ",
+    "sections": [
+      {
+        "heading": "Exemplo 😀",
+        "text": "Hi 𝄞 end"
+      }
+    ]
+  },
+  "output": {
+    "locale": "en-us",
+    "sections": [
+      {
+        "astralPairCount": 2,
+        "index": 0
+      }
+    ],
+    "totalAstralPairs": 2
+  }
+}
+```
+
+```json
+{
+  "input": {
+    "locale": "es",
+    "sections": [
+      {
+        "heading": "Notas",
+        "text": "A 😀 B 😀"
+      },
+      {
+        "heading": "Intro",
+        "text": "Hi"
+      }
+    ]
+  },
+  "output": {
+    "locale": "es",
+    "sections": [
+      {
+        "astralPairCount": 2,
+        "index": 0
+      },
+      {
+        "astralPairCount": 0,
+        "index": 1
+      }
+    ],
+    "totalAstralPairs": 2
+  }
+}
+```
+
+Public regression tests: `src/community_document_astral_pair_count_map.test.js`.
